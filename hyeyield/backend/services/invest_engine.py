@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.models.allocation import Allocation
 from backend.models.schwab_account import SchwabAccount
 from backend.models.trade_log import TradeLog
+from backend.models.user import User
 from backend.services.schwab_client import SchwabAPIError, SchwabAuthError, SchwabClient
 
 
@@ -79,10 +80,12 @@ class InvestEngine:
             invest_result.error = "No allocations configured"
             return invest_result
 
-        # 4. Create client and refresh token
+        # 4. Load user credentials and create client
+        user_result = await self._db.execute(select(User).where(User.id == self._user_id))
+        user = user_result.scalar_one()
         client = SchwabClient(
-            app_key=account.get_app_key(),
-            app_secret=account.get_app_secret(),
+            app_key=user.get_app_key(),
+            app_secret=user.get_app_secret(),
             refresh_token=account.get_refresh_token(),
         )
 

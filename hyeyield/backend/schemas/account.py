@@ -7,8 +7,6 @@ class AccountCreate(BaseModel):
     account_number: str
     account_name: str
     account_type: Optional[str] = None
-    app_key: str
-    app_secret: str
     min_order_value: float = 1.0
     remainder_symbol: str = "SPUS"
 

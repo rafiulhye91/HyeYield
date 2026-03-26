@@ -83,11 +83,7 @@ async def create_account(
         account_type=body.account_type,
         min_order_value=body.min_order_value,
         remainder_symbol=body.remainder_symbol,
-        app_key_enc="",
-        app_secret_enc="",
     )
-    account.set_app_key(body.app_key)
-    account.set_app_secret(body.app_secret)
 
     db.add(account)
     await db.commit()
@@ -141,10 +137,10 @@ async def get_auth_url(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    account = await _get_owned_account(account_id, current_user, db)
+    await _get_owned_account(account_id, current_user, db)
     params = urlencode({
         "response_type": "code",
-        "client_id": account.get_app_key(),
+        "client_id": current_user.get_app_key(),
         "redirect_uri": _REDIRECT_URI,
     })
     return {"auth_url": f"{_SCHWAB_AUTH_URL}?{params}"}
@@ -165,8 +161,8 @@ async def connect_schwab(
     code = match.group(1)
 
     import httpx, base64
-    app_key = account.get_app_key()
-    app_secret = account.get_app_secret()
+    app_key = current_user.get_app_key()
+    app_secret = current_user.get_app_secret()
     basic = base64.b64encode(f"{app_key}:{app_secret}".encode()).decode()
 
     async with httpx.AsyncClient(timeout=30) as client:
@@ -214,8 +210,8 @@ async def get_balances(
     balances = []
     for account in accounts:
         client = SchwabClient(
-            app_key=account.get_app_key(),
-            app_secret=account.get_app_secret(),
+            app_key=current_user.get_app_key(),
+            app_secret=current_user.get_app_secret(),
             refresh_token=account.get_refresh_token(),
         )
         try:

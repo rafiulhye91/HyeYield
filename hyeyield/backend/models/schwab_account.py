@@ -13,8 +13,6 @@ class SchwabAccount(Base):
     account_number: Mapped[str] = mapped_column(String(50), nullable=False)
     account_name: Mapped[str] = mapped_column(String(255), nullable=False)
     account_type: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
-    app_key_enc: Mapped[str] = mapped_column(String(512), nullable=False)
-    app_secret_enc: Mapped[str] = mapped_column(String(512), nullable=False)
     refresh_token_enc: Mapped[Optional[str]] = mapped_column(String(1024), nullable=True)
     rotation_state: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
@@ -27,25 +25,9 @@ class SchwabAccount(Base):
         "Allocation", back_populates="account", cascade="all, delete-orphan"
     )
 
-    def get_app_key(self) -> str:
-        from backend.utils.crypto import decrypt
-        return decrypt(self.app_key_enc)
-
-    def get_app_secret(self) -> str:
-        from backend.utils.crypto import decrypt
-        return decrypt(self.app_secret_enc)
-
     def get_refresh_token(self) -> str:
         from backend.utils.crypto import decrypt
         return decrypt(self.refresh_token_enc)
-
-    def set_app_key(self, plaintext: str) -> None:
-        from backend.utils.crypto import encrypt
-        self.app_key_enc = encrypt(plaintext)
-
-    def set_app_secret(self, plaintext: str) -> None:
-        from backend.utils.crypto import encrypt
-        self.app_secret_enc = encrypt(plaintext)
 
     def set_refresh_token(self, plaintext: str) -> None:
         from backend.utils.crypto import encrypt

@@ -102,8 +102,8 @@ async def refresh_tokens_job(user_id: int) -> None:
 
         for account in accounts:
             client = SchwabClient(
-                app_key=account.get_app_key(),
-                app_secret=account.get_app_secret(),
+                app_key=user.get_app_key(),
+                app_secret=user.get_app_secret(),
                 refresh_token=account.get_refresh_token(),
             )
             try:
