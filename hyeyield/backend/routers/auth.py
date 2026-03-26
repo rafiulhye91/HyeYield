@@ -55,6 +55,7 @@ def _user_profile(user: User) -> UserProfile:
         ntfy_topic=user.ntfy_topic,
         schedule_cron=user.schedule_cron,
         has_schwab_credentials=bool(user.app_key_enc and user.app_secret_enc),
+        has_schwab_connected=bool(user.refresh_token_enc),
         created_at=user.created_at,
     )
 

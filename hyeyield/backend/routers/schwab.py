@@ -18,6 +18,7 @@ from backend.schemas.account import (
     AllocationOut,
     ConnectRequest,
 )
+from pydantic import BaseModel
 from backend.services.schwab_client import SchwabAuthError, SchwabAPIError, SchwabClient
 from backend.utils.jwt_utils import get_current_user
 
@@ -31,7 +32,7 @@ _SCHWAB_AUTH_URL = "https://api.schwabapi.com/v1/oauth/authorize"
 # Helpers
 # ------------------------------------------------------------------
 
-def _account_response(account: SchwabAccount) -> AccountResponse:
+def _account_response(account: SchwabAccount, user: User) -> AccountResponse:
     return AccountResponse(
         id=account.id,
         account_number=account.account_number,
@@ -43,8 +44,12 @@ def _account_response(account: SchwabAccount) -> AccountResponse:
         remainder_symbol=account.remainder_symbol,
         last_run=account.last_run,
         created_at=account.created_at,
-        connected=account.refresh_token_enc is not None,
+        connected=user.refresh_token_enc is not None,
     )
+
+
+class _RedirectBody(BaseModel):
+    redirect_url: str
 
 
 async def _get_owned_account(account_id: int, user: User, db: AsyncSession) -> SchwabAccount:
@@ -67,7 +72,7 @@ async def list_accounts(
     result = await db.execute(
         select(SchwabAccount).where(SchwabAccount.user_id == current_user.id)
     )
-    return [_account_response(a) for a in result.scalars().all()]
+    return [_account_response(a, current_user) for a in result.scalars().all()]
 
 
 @router.post("/accounts", response_model=AccountResponse, status_code=status.HTTP_201_CREATED)
@@ -88,7 +93,7 @@ async def create_account(
     db.add(account)
     await db.commit()
     await db.refresh(account)
-    return _account_response(account)
+    return _account_response(account, current_user)
 
 
 @router.put("/accounts/{account_id}", response_model=AccountResponse)
@@ -113,7 +118,7 @@ async def update_account(
 
     await db.commit()
     await db.refresh(account)
-    return _account_response(account)
+    return _account_response(account, current_user)
 
 
 @router.delete("/accounts/{account_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -133,11 +138,10 @@ async def delete_account(
 
 @router.get("/schwab/auth-url")
 async def get_auth_url(
-    account_id: int,
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
 ):
-    await _get_owned_account(account_id, current_user, db)
+    if not current_user.app_key_enc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="No Schwab credentials configured. Add App Key and Secret in Settings.")
     params = urlencode({
         "response_type": "code",
         "client_id": current_user.get_app_key(),
@@ -148,13 +152,10 @@ async def get_auth_url(
 
 @router.post("/schwab/connect")
 async def connect_schwab(
-    body: ConnectRequest,
+    body: _RedirectBody,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    account = await _get_owned_account(body.account_id, current_user, db)
-
-    # Extract the auth code from the redirect URL
     match = re.search(r"[?&]code=([^&]+)", body.redirect_url)
     if not match:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="No auth code found in redirect URL")
@@ -182,15 +183,86 @@ async def connect_schwab(
     if resp.status_code != 200:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=f"Schwab token exchange failed: {resp.text}")
 
-    data = resp.json()
-    account.set_refresh_token(data["refresh_token"])
+    token_data = resp.json()
+    current_user.set_refresh_token(token_data["refresh_token"])
     await db.commit()
 
-    # Register token keep-alive job now that account is connected
+    # Auto-discover and sync all Schwab accounts
+    client = SchwabClient(app_key=app_key, app_secret=app_secret, refresh_token=token_data["refresh_token"])
+    try:
+        access_token, new_refresh = await client.refresh_access_token()
+        current_user.set_refresh_token(new_refresh)
+        balances_data = await client.get_all_balances(access_token)
+        for item in balances_data:
+            acct = item.get("securitiesAccount", {})
+            acc_num = acct.get("accountNumber")
+            if not acc_num:
+                continue
+            existing = await db.execute(
+                select(SchwabAccount).where(
+                    SchwabAccount.user_id == current_user.id,
+                    SchwabAccount.account_number == acc_num,
+                )
+            )
+            if existing.scalar_one_or_none() is None:
+                acc_type = acct.get("type", "").replace("_", " ").title()
+                new_acct = SchwabAccount(
+                    user_id=current_user.id,
+                    account_number=acc_num,
+                    account_name=f"{acc_type} ...{acc_num[-4:]}",
+                    account_type=acct.get("type", "").lower(),
+                )
+                db.add(new_acct)
+        await db.commit()
+    except (SchwabAuthError, SchwabAPIError):
+        pass  # token saved — account sync can be retried via /schwab/sync
+
     from backend.services.scheduler import register_token_refresh_job
     register_token_refresh_job(current_user.id)
 
     return {"success": True}
+
+
+@router.post("/schwab/sync")
+async def sync_accounts(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Re-sync accounts from Schwab — discovers any new accounts."""
+    if not current_user.refresh_token_enc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Not connected to Schwab. Complete OAuth first.")
+    client = SchwabClient(
+        app_key=current_user.get_app_key(),
+        app_secret=current_user.get_app_secret(),
+        refresh_token=current_user.get_refresh_token(),
+    )
+    access_token, new_refresh = await client.refresh_access_token()
+    current_user.set_refresh_token(new_refresh)
+    balances_data = await client.get_all_balances(access_token)
+    synced = 0
+    for item in balances_data:
+        acct = item.get("securitiesAccount", {})
+        acc_num = acct.get("accountNumber")
+        if not acc_num:
+            continue
+        existing = await db.execute(
+            select(SchwabAccount).where(
+                SchwabAccount.user_id == current_user.id,
+                SchwabAccount.account_number == acc_num,
+            )
+        )
+        if existing.scalar_one_or_none() is None:
+            acc_type = acct.get("type", "").replace("_", " ").title()
+            new_acct = SchwabAccount(
+                user_id=current_user.id,
+                account_number=acc_num,
+                account_name=f"{acc_type} ...{acc_num[-4:]}",
+                account_type=acct.get("type", "").lower(),
+            )
+            db.add(new_acct)
+            synced += 1
+    await db.commit()
+    return {"synced": synced}
 
 
 def _parse_balance(data: list, account_number: str) -> dict:
@@ -215,6 +287,8 @@ async def get_balances(
     )
     accounts = result.scalars().all()
 
+    connected = current_user.refresh_token_enc is not None
+
     balances = []
     for account in accounts:
         if not account.enabled:
@@ -222,11 +296,11 @@ async def get_balances(
                 "account_id": account.id,
                 "account_name": account.account_name,
                 "account_number": account.account_number,
-                "connected": account.refresh_token_enc is not None,
+                "connected": connected,
                 "enabled": False,
             })
             continue
-        if not account.refresh_token_enc:
+        if not connected:
             balances.append({
                 "account_id": account.id,
                 "account_name": account.account_name,
@@ -238,11 +312,11 @@ async def get_balances(
         client = SchwabClient(
             app_key=current_user.get_app_key(),
             app_secret=current_user.get_app_secret(),
-            refresh_token=account.get_refresh_token(),
+            refresh_token=current_user.get_refresh_token(),
         )
         try:
             access_token, new_refresh = await client.refresh_access_token()
-            account.set_refresh_token(new_refresh)
+            current_user.set_refresh_token(new_refresh)
             await db.commit()
 
             account_data = await client.get_all_balances(access_token)

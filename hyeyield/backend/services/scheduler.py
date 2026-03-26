@@ -78,9 +78,8 @@ def remove_invest_job(user_id: int) -> None:
 # ------------------------------------------------------------------
 
 async def refresh_tokens_job(user_id: int) -> None:
-    """Refresh Schwab tokens for all connected accounts. Runs every 5 days."""
+    """Refresh Schwab token for user. Runs every 5 days."""
     from sqlalchemy import select
-    from backend.models.schwab_account import SchwabAccount
     from backend.models.trade_log import TradeLog
     from backend.models.user import User
     from backend.services.schwab_client import SchwabAuthError, SchwabClient
@@ -88,47 +87,40 @@ async def refresh_tokens_job(user_id: int) -> None:
 
     logger.info("Token refresh job firing for user_id=%d", user_id)
     async with AsyncSessionLocal() as db:
-        result = await db.execute(
-            select(SchwabAccount).where(
-                SchwabAccount.user_id == user_id,
-                SchwabAccount.refresh_token_enc.isnot(None),
-                SchwabAccount.enabled == True,
-            )
-        )
-        accounts = result.scalars().all()
-
         user_result = await db.execute(select(User).where(User.id == user_id))
         user = user_result.scalar_one_or_none()
+        if user is None or not user.refresh_token_enc:
+            logger.info("Token refresh skipped for user_id=%d (no token)", user_id)
+            return
 
-        for account in accounts:
-            client = SchwabClient(
-                app_key=user.get_app_key(),
-                app_secret=user.get_app_secret(),
-                refresh_token=account.get_refresh_token(),
+        client = SchwabClient(
+            app_key=user.get_app_key(),
+            app_secret=user.get_app_secret(),
+            refresh_token=user.get_refresh_token(),
+        )
+        try:
+            _, new_refresh = await client.refresh_access_token()
+            user.set_refresh_token(new_refresh)
+            await db.commit()
+            logger.info("Token refreshed for user_id=%d", user_id)
+        except SchwabAuthError as e:
+            logger.error("Token refresh FAILED for user_id=%d: %s", user_id, e)
+            log = TradeLog(
+                user_id=user_id,
+                account_id=None,
+                symbol="N/A",
+                status="FAILED",
+                message=f"TOKEN_REFRESH failed: {e}",
+                dry_run=False,
             )
-            try:
-                _, new_refresh = await client.refresh_access_token()
-                account.set_refresh_token(new_refresh)
-                await db.commit()
-                logger.info("Token refreshed for account_id=%d", account.id)
-            except SchwabAuthError as e:
-                logger.error("Token refresh FAILED for account_id=%d: %s", account.id, e)
-                log = TradeLog(
-                    user_id=user_id,
-                    account_id=account.id,
-                    symbol="N/A",
-                    status="FAILED",
-                    message=f"TOKEN_REFRESH failed: {e}",
-                    dry_run=False,
+            db.add(log)
+            await db.commit()
+            if user.ntfy_topic:
+                await send_notify(
+                    user.ntfy_topic,
+                    "Hye-Yield: Token Expired",
+                    "Your Schwab connection has expired. Please re-connect in the Accounts page.",
                 )
-                db.add(log)
-                await db.commit()
-                if user and user.ntfy_topic:
-                    await send_notify(
-                        user.ntfy_topic,
-                        "Hye-Yield: Token Expired",
-                        f"Account '{account.account_name}' needs to be re-connected to Schwab.",
-                    )
 
 
 def register_token_refresh_job(user_id: int) -> None:

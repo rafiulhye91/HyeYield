@@ -13,7 +13,6 @@ class SchwabAccount(Base):
     account_number: Mapped[str] = mapped_column(String(50), nullable=False)
     account_name: Mapped[str] = mapped_column(String(255), nullable=False)
     account_type: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
-    refresh_token_enc: Mapped[Optional[str]] = mapped_column(String(1024), nullable=True)
     rotation_state: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     min_order_value: Mapped[float] = mapped_column(Float, nullable=False, default=1.0)
@@ -24,11 +23,3 @@ class SchwabAccount(Base):
     allocations: Mapped[List["Allocation"]] = relationship(  # noqa: F821
         "Allocation", back_populates="account", cascade="all, delete-orphan"
     )
-
-    def get_refresh_token(self) -> str:
-        from backend.utils.crypto import decrypt
-        return decrypt(self.refresh_token_enc)
-
-    def set_refresh_token(self, plaintext: str) -> None:
-        from backend.utils.crypto import encrypt
-        self.refresh_token_enc = encrypt(plaintext)
