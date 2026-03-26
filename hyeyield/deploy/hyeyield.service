@@ -1,0 +1,14 @@
+[Unit]
+Description=Hye-Yield FastAPI backend
+After=network.target
+
+[Service]
+User=rafiulhye91
+WorkingDirectory=/home/rafiulhye91/hyeyield
+EnvironmentFile=/home/rafiulhye91/hyeyield/.env
+ExecStart=/home/rafiulhye91/hyeyield/venv/bin/uvicorn backend.main:app --host 127.0.0.1 --port 8000 --workers 1
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
