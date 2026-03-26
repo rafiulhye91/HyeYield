@@ -11,7 +11,6 @@ app = FastAPI(title="Hye-Yield", version="1.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://localhost:5173",
         "https://hyeyield.duckdns.org",
     ],
     allow_credentials=True,
