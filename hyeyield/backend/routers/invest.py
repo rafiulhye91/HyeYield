@@ -163,6 +163,57 @@ async def get_logs(
 
 
 # ------------------------------------------------------------------
+# Schedule
+# ------------------------------------------------------------------
+
+from pydantic import BaseModel
+
+class ScheduleUpdate(BaseModel):
+    cron: str
+
+
+@router.get("/invest/schedule")
+async def get_schedule(
+    current_user: User = Depends(get_current_user),
+):
+    from backend.services.scheduler import scheduler
+    job = scheduler.get_job(f"invest_{current_user.id}")
+    next_run = job.next_run_time.isoformat() if job and job.next_run_time else None
+    return {
+        "schedule_cron": current_user.schedule_cron,
+        "next_run": next_run,
+    }
+
+
+@router.put("/invest/schedule")
+async def update_schedule(
+    body: ScheduleUpdate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    from backend.services.scheduler import register_invest_job, scheduler
+
+    parts = body.cron.strip().split()
+    if len(parts) != 5:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="cron must be a 5-field expression (e.g. '35 9 1,15 * *')",
+        )
+
+    try:
+        register_invest_job(current_user.id, body.cron)
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+
+    current_user.schedule_cron = body.cron
+    await db.commit()
+
+    job = scheduler.get_job(f"invest_{current_user.id}")
+    next_run = job.next_run_time.isoformat() if job and job.next_run_time else None
+    return {"schedule_cron": body.cron, "next_run": next_run}
+
+
+# ------------------------------------------------------------------
 # Helper
 # ------------------------------------------------------------------
 
