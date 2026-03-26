@@ -4,9 +4,9 @@ After=network.target
 
 [Service]
 User=rafiulhye91
-WorkingDirectory=/home/rafiulhye91/hyeyield
-EnvironmentFile=/home/rafiulhye91/hyeyield/.env
-ExecStart=/home/rafiulhye91/hyeyield/venv/bin/uvicorn backend.main:app --host 127.0.0.1 --port 8000 --workers 1
+WorkingDirectory=/home/rafiulhye91/hyeyield/hyeyield
+EnvironmentFile=/home/rafiulhye91/hyeyield/hyeyield/.env
+ExecStart=/home/rafiulhye91/hyeyield/hyeyield/venv/bin/uvicorn backend.main:app --host 127.0.0.1 --port 8000 --workers 1
 Restart=always
 RestartSec=5
 
