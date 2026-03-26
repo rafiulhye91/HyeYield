@@ -190,6 +190,10 @@ async def connect_schwab(
     account.set_refresh_token(data["refresh_token"])
     await db.commit()
 
+    # Register token keep-alive job now that account is connected
+    from backend.services.scheduler import register_token_refresh_job
+    register_token_refresh_job(current_user.id)
+
     return {"success": True}
 
 
