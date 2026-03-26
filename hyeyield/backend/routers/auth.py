@@ -47,9 +47,21 @@ async def login(body: LoginRequest, db: AsyncSession = Depends(get_db)):
     return AuthResponse(access_token=create_access_token(user.id))
 
 
+def _user_profile(user: User) -> UserProfile:
+    return UserProfile(
+        id=user.id,
+        username=user.username,
+        email=user.email,
+        ntfy_topic=user.ntfy_topic,
+        schedule_cron=user.schedule_cron,
+        has_schwab_credentials=bool(user.app_key_enc and user.app_secret_enc),
+        created_at=user.created_at,
+    )
+
+
 @router.get("/me", response_model=UserProfile)
 async def me(current_user: User = Depends(get_current_user)):
-    return current_user
+    return _user_profile(current_user)
 
 
 @router.put("/me", response_model=UserProfile)
@@ -60,6 +72,10 @@ async def update_me(
 ):
     if body.ntfy_topic is not None:
         current_user.ntfy_topic = body.ntfy_topic or None
+    if body.app_key:
+        current_user.set_app_key(body.app_key)
+    if body.app_secret:
+        current_user.set_app_secret(body.app_secret)
     await db.commit()
     await db.refresh(current_user)
-    return current_user
+    return _user_profile(current_user)

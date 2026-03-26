@@ -2,17 +2,26 @@ import { useEffect, useState } from 'react';
 import Layout from '../components/Layout';
 import api from '../api/client';
 
+const PLACEHOLDER = '••••••••••••••••';
+
 export default function Settings() {
   const [cron, setCron] = useState('');
   const [ntfyTopic, setNtfyTopic] = useState('');
+  const [appKey, setAppKey] = useState('');
+  const [appSecret, setAppSecret] = useState('');
+  const [hasCredentials, setHasCredentials] = useState(false);
   const [cronMsg, setCronMsg] = useState('');
   const [ntfyMsg, setNtfyMsg] = useState('');
+  const [schwabMsg, setSchwabMsg] = useState('');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     Promise.all([
       api.get('/invest/schedule').then((r) => setCron(r.data.schedule_cron || '')),
-      api.get('/auth/me').then((r) => setNtfyTopic(r.data.ntfy_topic || '')),
+      api.get('/auth/me').then((r) => {
+        setNtfyTopic(r.data.ntfy_topic || '');
+        setHasCredentials(r.data.has_schwab_credentials);
+      }),
     ]).finally(() => setLoading(false));
   }, []);
 
@@ -38,6 +47,27 @@ export default function Settings() {
     }
   };
 
+  const saveSchwab = async (e) => {
+    e.preventDefault();
+    setSchwabMsg('');
+    const payload = {};
+    if (appKey) payload.app_key = appKey;
+    if (appSecret) payload.app_secret = appSecret;
+    if (!payload.app_key && !payload.app_secret) {
+      setSchwabMsg('Enter a new value to update.');
+      return;
+    }
+    try {
+      await api.put('/auth/me', payload);
+      setAppKey('');
+      setAppSecret('');
+      setHasCredentials(true);
+      setSchwabMsg('Schwab credentials updated.');
+    } catch (err) {
+      setSchwabMsg(err.response?.data?.detail || 'Failed');
+    }
+  };
+
   if (loading) return <Layout><p>Loading…</p></Layout>;
 
   return (
@@ -55,13 +85,44 @@ export default function Settings() {
         </form>
       </section>
 
-      <section style={{ maxWidth: '400px' }}>
+      <section style={{ marginBottom: '2rem', maxWidth: '400px' }}>
         <h3>Push Notifications (ntfy.sh)</h3>
         <form onSubmit={saveNtfy}>
           <label>ntfy Topic</label><br />
           <input value={ntfyTopic} onChange={(e) => setNtfyTopic(e.target.value)} placeholder="my-hyeyield-topic" style={{ width: '100%', padding: '0.5rem', marginTop: '0.25rem', marginBottom: '0.75rem' }} />
           {ntfyMsg && <p style={{ color: ntfyMsg.includes('Failed') ? 'red' : 'green' }}>{ntfyMsg}</p>}
           <button type="submit" style={{ padding: '0.5rem 1rem', background: '#1a1a2e', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>Save</button>
+        </form>
+      </section>
+
+      <section style={{ maxWidth: '400px' }}>
+        <h3>Schwab Configuration</h3>
+        <form onSubmit={saveSchwab}>
+          <div style={{ marginBottom: '1rem' }}>
+            <label>App Key</label><br />
+            <input
+              type="password"
+              value={appKey}
+              onChange={(e) => setAppKey(e.target.value)}
+              placeholder={hasCredentials ? PLACEHOLDER : 'Enter App Key'}
+              style={{ width: '100%', padding: '0.5rem', marginTop: '0.25rem' }}
+            />
+          </div>
+          <div style={{ marginBottom: '0.75rem' }}>
+            <label>App Secret</label><br />
+            <input
+              type="password"
+              value={appSecret}
+              onChange={(e) => setAppSecret(e.target.value)}
+              placeholder={hasCredentials ? PLACEHOLDER : 'Enter App Secret'}
+              style={{ width: '100%', padding: '0.5rem', marginTop: '0.25rem' }}
+            />
+          </div>
+          <small style={{ color: '#888', display: 'block', marginBottom: '0.75rem' }}>
+            {hasCredentials ? 'Credentials are set. Type new values to replace them.' : 'No credentials saved yet.'}
+          </small>
+          {schwabMsg && <p style={{ color: schwabMsg.includes('Failed') ? 'red' : 'green' }}>{schwabMsg}</p>}
+          <button type="submit" style={{ padding: '0.5rem 1rem', background: '#1a1a2e', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>Update Credentials</button>
         </form>
       </section>
     </Layout>
