@@ -145,25 +145,41 @@ export default function Dashboard() {
   const [running, setRunning] = useState(false);
 
   useEffect(() => {
-    Promise.all([
-      api.get('/schwab/balances').then((r) => setBalances(r.data)),
-      api.get('/accounts').then((r) => {
-        const connected = r.data.filter((a) => a.connected && a.enabled);
-        setConnectedAccounts(connected);
-        return Promise.all(
-          connected.map((a) =>
-            api.get(`/accounts/${a.id}/allocations`).then((ar) => ({
-              id: a.id,
-              symbols: ar.data.map((al) => al.symbol),
-            }))
-          )
-        );
-      }).then((allocs) => {
-        const map = {};
-        allocs.forEach(({ id, symbols }) => { map[id] = symbols; });
-        setRotations(map);
-      }),
-    ]).finally(() => setLoading(false));
+    api.get('/accounts').then(async (r) => {
+      const accounts = r.data;
+
+      // Fetch balances — merge by account_id, fall back gracefully on error
+      let balanceMap = {};
+      try {
+        const br = await api.get('/schwab/balances');
+        br.data.forEach((b) => { balanceMap[b.account_id] = b; });
+      } catch (_) {}
+
+      // Build unified card data from accounts list (source of truth)
+      const cards = accounts.map((a) => ({
+        account_id: a.id,
+        account_name: a.account_name,
+        account_number: a.account_number,
+        connected: a.connected,
+        enabled: a.enabled,
+        ...(balanceMap[a.id] || {}),
+      }));
+      setBalances(cards);
+
+      // Rotation data for connected+enabled accounts
+      const connected = accounts.filter((a) => a.connected && a.enabled);
+      setConnectedAccounts(connected);
+      const allocs = await Promise.all(
+        connected.map((a) =>
+          api.get(`/accounts/${a.id}/allocations`)
+            .then((ar) => ({ id: a.id, symbols: ar.data.map((al) => al.symbol) }))
+            .catch(() => ({ id: a.id, symbols: [] }))
+        )
+      );
+      const map = {};
+      allocs.forEach(({ id, symbols }) => { map[id] = symbols; });
+      setRotations(map);
+    }).finally(() => setLoading(false));
   }, []);
 
   const disconnected = balances.filter((b) => b.enabled && !b.connected);
