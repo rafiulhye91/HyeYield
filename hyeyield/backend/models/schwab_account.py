@@ -26,3 +26,27 @@ class SchwabAccount(Base):
     allocations: Mapped[List["Allocation"]] = relationship(  # noqa: F821
         "Allocation", back_populates="account", cascade="all, delete-orphan"
     )
+
+    def get_app_key(self) -> str:
+        from backend.utils.crypto import decrypt
+        return decrypt(self.app_key_enc)
+
+    def get_app_secret(self) -> str:
+        from backend.utils.crypto import decrypt
+        return decrypt(self.app_secret_enc)
+
+    def get_refresh_token(self) -> str:
+        from backend.utils.crypto import decrypt
+        return decrypt(self.refresh_token_enc)
+
+    def set_app_key(self, plaintext: str) -> None:
+        from backend.utils.crypto import encrypt
+        self.app_key_enc = encrypt(plaintext)
+
+    def set_app_secret(self, plaintext: str) -> None:
+        from backend.utils.crypto import encrypt
+        self.app_secret_enc = encrypt(plaintext)
+
+    def set_refresh_token(self, plaintext: str) -> None:
+        from backend.utils.crypto import encrypt
+        self.refresh_token_enc = encrypt(plaintext)
