@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import Layout from '../components/Layout';
 import api from '../api/client';
 
-const EMPTY_FORM = { account_number: '', account_name: '', account_type: 'individual', app_key: '', app_secret: '', min_order_value: 1.0, remainder_symbol: 'SNSXX' };
+const EMPTY_FORM = { account_number: '', account_name: '', account_type: 'individual', min_order_value: 1.0, remainder_symbol: 'SPUS' };
 
 export default function Accounts() {
   const [accounts, setAccounts] = useState([]);
@@ -71,7 +71,7 @@ export default function Accounts() {
       {showForm && (
         <form onSubmit={handleCreate} style={{ border: '1px solid #ddd', borderRadius: '6px', padding: '1rem', marginBottom: '1.5rem' }}>
           <h3 style={{ marginTop: 0 }}>New Account</h3>
-          {[['account_number', 'Account Number'], ['account_name', 'Account Name'], ['app_key', 'App Key'], ['app_secret', 'App Secret'], ['remainder_symbol', 'Remainder Symbol']].map(([name, label]) => (
+          {[['account_number', 'Account Number'], ['account_name', 'Account Name'], ['remainder_symbol', 'Remainder Symbol']].map(([name, label]) => (
             <div key={name} style={{ marginBottom: '0.75rem' }}>
               <label>{label}</label><br />
               <input name={name} value={form[name]} onChange={handleChange} required style={{ width: '100%', padding: '0.4rem', marginTop: '0.2rem' }} />

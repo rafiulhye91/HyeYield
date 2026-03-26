@@ -26,6 +26,8 @@ async def register(body: RegisterRequest, db: AsyncSession = Depends(get_db)):
         email=body.email,
         password_hash=hash_password(body.password),
     )
+    user.set_app_key(body.app_key)
+    user.set_app_secret(body.app_secret)
     db.add(user)
     await db.commit()
     await db.refresh(user)
