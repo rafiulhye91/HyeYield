@@ -30,7 +30,7 @@ export default function Settings() {
   const connectSchwab = async () => {
     try {
       const res = await api.get('/schwab/auth-url');
-      window.location.href = res.data.auth_url;
+      window.open(res.data.auth_url, '_blank');
     } catch (err) {
       setSchwabMsg(err.response?.data?.detail || 'Could not get auth URL.');
     }
@@ -73,9 +73,9 @@ export default function Settings() {
       setAppKey('');
       setAppSecret('');
       setHasCredentials(true);
-      setSchwabMsg('Credentials saved. Redirecting to Schwab…');
+      setSchwabMsg('Credentials saved. Opening Schwab authorization…');
       const res = await api.get('/schwab/auth-url');
-      window.location.href = res.data.auth_url;
+      window.open(res.data.auth_url, '_blank');
     } catch (err) {
       setSchwabMsg(err.response?.data?.detail || 'Failed');
     }

@@ -15,7 +15,7 @@ export default function Accounts() {
   const startConnect = async () => {
     try {
       const res = await api.get('/schwab/auth-url');
-      window.location.href = res.data.auth_url;
+      window.open(res.data.auth_url, '_blank');
     } catch (err) {
       alert(err.response?.data?.detail || 'Could not get auth URL. Make sure Schwab credentials are configured in Settings.');
     }
