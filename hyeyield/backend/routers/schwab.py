@@ -1,0 +1,295 @@
+import re
+from typing import List, Optional
+from urllib.parse import urlencode
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import delete, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from backend.database import get_db
+from backend.models.allocation import Allocation
+from backend.models.schwab_account import SchwabAccount
+from backend.models.user import User
+from backend.schemas.account import (
+    AccountCreate,
+    AccountResponse,
+    AccountUpdate,
+    AllocationIn,
+    AllocationOut,
+    ConnectRequest,
+)
+from backend.services.schwab_client import SchwabAuthError, SchwabAPIError, SchwabClient
+from backend.utils.jwt_utils import get_current_user
+
+router = APIRouter(tags=["schwab"])
+
+_REDIRECT_URI = "https://hyeyield.duckdns.org/redirect"
+_SCHWAB_AUTH_URL = "https://api.schwabapi.com/v1/oauth/authorize"
+
+
+# ------------------------------------------------------------------
+# Helpers
+# ------------------------------------------------------------------
+
+def _account_response(account: SchwabAccount) -> AccountResponse:
+    return AccountResponse(
+        id=account.id,
+        account_number=account.account_number,
+        account_name=account.account_name,
+        account_type=account.account_type,
+        rotation_state=account.rotation_state,
+        enabled=account.enabled,
+        min_order_value=account.min_order_value,
+        remainder_symbol=account.remainder_symbol,
+        last_run=account.last_run,
+        created_at=account.created_at,
+        connected=account.refresh_token_enc is not None,
+    )
+
+
+async def _get_owned_account(account_id: int, user: User, db: AsyncSession) -> SchwabAccount:
+    result = await db.execute(select(SchwabAccount).where(SchwabAccount.id == account_id))
+    account = result.scalar_one_or_none()
+    if account is None or account.user_id != user.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Account not found")
+    return account
+
+
+# ------------------------------------------------------------------
+# Accounts CRUD
+# ------------------------------------------------------------------
+
+@router.get("/accounts", response_model=List[AccountResponse])
+async def list_accounts(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(SchwabAccount).where(SchwabAccount.user_id == current_user.id)
+    )
+    return [_account_response(a) for a in result.scalars().all()]
+
+
+@router.post("/accounts", response_model=AccountResponse, status_code=status.HTTP_201_CREATED)
+async def create_account(
+    body: AccountCreate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    account = SchwabAccount(
+        user_id=current_user.id,
+        account_number=body.account_number,
+        account_name=body.account_name,
+        account_type=body.account_type,
+        min_order_value=body.min_order_value,
+        remainder_symbol=body.remainder_symbol,
+        app_key_enc="",
+        app_secret_enc="",
+    )
+    account.set_app_key(body.app_key)
+    account.set_app_secret(body.app_secret)
+
+    db.add(account)
+    await db.commit()
+    await db.refresh(account)
+    return _account_response(account)
+
+
+@router.put("/accounts/{account_id}", response_model=AccountResponse)
+async def update_account(
+    account_id: int,
+    body: AccountUpdate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    account = await _get_owned_account(account_id, current_user, db)
+
+    if body.account_name is not None:
+        account.account_name = body.account_name
+    if body.account_type is not None:
+        account.account_type = body.account_type
+    if body.min_order_value is not None:
+        account.min_order_value = body.min_order_value
+    if body.remainder_symbol is not None:
+        account.remainder_symbol = body.remainder_symbol
+    if body.enabled is not None:
+        account.enabled = body.enabled
+
+    await db.commit()
+    await db.refresh(account)
+    return _account_response(account)
+
+
+@router.delete("/accounts/{account_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_account(
+    account_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    account = await _get_owned_account(account_id, current_user, db)
+    await db.delete(account)
+    await db.commit()
+
+
+# ------------------------------------------------------------------
+# Schwab OAuth
+# ------------------------------------------------------------------
+
+@router.get("/schwab/auth-url")
+async def get_auth_url(
+    account_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    account = await _get_owned_account(account_id, current_user, db)
+    params = urlencode({
+        "response_type": "code",
+        "client_id": account.get_app_key(),
+        "redirect_uri": _REDIRECT_URI,
+    })
+    return {"auth_url": f"{_SCHWAB_AUTH_URL}?{params}"}
+
+
+@router.post("/schwab/connect")
+async def connect_schwab(
+    body: ConnectRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    account = await _get_owned_account(body.account_id, current_user, db)
+
+    # Extract the auth code from the redirect URL
+    match = re.search(r"[?&]code=([^&]+)", body.redirect_url)
+    if not match:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="No auth code found in redirect URL")
+    code = match.group(1)
+
+    import httpx, base64
+    app_key = account.get_app_key()
+    app_secret = account.get_app_secret()
+    basic = base64.b64encode(f"{app_key}:{app_secret}".encode()).decode()
+
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await client.post(
+            "https://api.schwabapi.com/v1/oauth/token",
+            headers={
+                "Authorization": f"Basic {basic}",
+                "Content-Type": "application/x-www-form-urlencoded",
+            },
+            data={
+                "grant_type": "authorization_code",
+                "code": code,
+                "redirect_uri": _REDIRECT_URI,
+            },
+        )
+
+    if resp.status_code != 200:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=f"Schwab token exchange failed: {resp.text}")
+
+    data = resp.json()
+    account.set_refresh_token(data["refresh_token"])
+    await db.commit()
+
+    return {"success": True}
+
+
+@router.get("/schwab/balances")
+async def get_balances(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(SchwabAccount).where(
+            SchwabAccount.user_id == current_user.id,
+            SchwabAccount.refresh_token_enc.isnot(None),
+            SchwabAccount.enabled == True,
+        )
+    )
+    accounts = result.scalars().all()
+
+    balances = []
+    for account in accounts:
+        client = SchwabClient(
+            app_key=account.get_app_key(),
+            app_secret=account.get_app_secret(),
+            refresh_token=account.get_refresh_token(),
+        )
+        try:
+            access_token, new_refresh = await client.refresh_access_token()
+            account.set_refresh_token(new_refresh)
+            await db.commit()
+
+            account_data = await client.get_all_balances(access_token)
+            balances.append({"account_id": account.id, "account_name": account.account_name, "data": account_data})
+        except (SchwabAuthError, SchwabAPIError) as e:
+            balances.append({"account_id": account.id, "account_name": account.account_name, "error": str(e)})
+
+    return balances
+
+
+# ------------------------------------------------------------------
+# Allocations
+# ------------------------------------------------------------------
+
+@router.get("/accounts/{account_id}/allocations", response_model=List[AllocationOut])
+async def get_allocations(
+    account_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    await _get_owned_account(account_id, current_user, db)
+    result = await db.execute(
+        select(Allocation)
+        .where(Allocation.account_id == account_id)
+        .order_by(Allocation.display_order)
+    )
+    return result.scalars().all()
+
+
+@router.put("/accounts/{account_id}/allocations", response_model=List[AllocationOut])
+async def set_allocations(
+    account_id: int,
+    body: List[AllocationIn],
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    await _get_owned_account(account_id, current_user, db)
+
+    if not body:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Allocations cannot be empty")
+
+    symbol_re = re.compile(r"^[A-Z]{1,10}$")
+    for item in body:
+        if not symbol_re.match(item.symbol):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"Invalid symbol '{item.symbol}' — must be 1–10 uppercase letters",
+            )
+
+    total = sum(item.target_pct for item in body)
+    if abs(total - 100.0) > 0.01:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Allocations must sum to 100.0 (got {total:.2f})",
+        )
+
+    # Atomic delete + insert
+    await db.execute(delete(Allocation).where(Allocation.account_id == account_id))
+    new_allocations = [
+        Allocation(
+            account_id=account_id,
+            symbol=item.symbol,
+            target_pct=item.target_pct,
+            display_order=item.display_order,
+        )
+        for item in body
+    ]
+    db.add_all(new_allocations)
+    await db.commit()
+
+    result = await db.execute(
+        select(Allocation)
+        .where(Allocation.account_id == account_id)
+        .order_by(Allocation.display_order)
+    )
+    return result.scalars().all()
