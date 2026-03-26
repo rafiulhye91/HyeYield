@@ -19,6 +19,10 @@ class AuthResponse(BaseModel):
     token_type: str = "bearer"
 
 
+class UserUpdate(BaseModel):
+    ntfy_topic: Optional[str] = None
+
+
 class UserProfile(BaseModel):
     id: int
     username: str

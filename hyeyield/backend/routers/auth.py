@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.database import get_db
 from backend.models.user import User
-from backend.schemas.auth import AuthResponse, LoginRequest, RegisterRequest, UserProfile
+from backend.schemas.auth import AuthResponse, LoginRequest, RegisterRequest, UserProfile, UserUpdate
 from backend.utils.auth_utils import hash_password, verify_password
 from backend.utils.jwt_utils import create_access_token, get_current_user
 
@@ -47,4 +47,17 @@ async def login(body: LoginRequest, db: AsyncSession = Depends(get_db)):
 
 @router.get("/me", response_model=UserProfile)
 async def me(current_user: User = Depends(get_current_user)):
+    return current_user
+
+
+@router.put("/me", response_model=UserProfile)
+async def update_me(
+    body: UserUpdate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    if body.ntfy_topic is not None:
+        current_user.ntfy_topic = body.ntfy_topic or None
+    await db.commit()
+    await db.refresh(current_user)
     return current_user
