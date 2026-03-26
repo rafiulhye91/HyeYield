@@ -193,22 +193,48 @@ async def connect_schwab(
     return {"success": True}
 
 
+def _parse_balance(data: list, account_number: str) -> dict:
+    for item in data:
+        acct = item.get("securitiesAccount", {})
+        if acct.get("accountNumber") == account_number:
+            bal = acct.get("currentBalances", {})
+            total = float(bal.get("liquidationValue", 0))
+            cash = float(bal.get("cashAvailableForTrading", 0))
+            invested = max(0.0, total - cash)
+            return {"total_value": total, "cash": cash, "invested": invested}
+    return {"total_value": None, "cash": None, "invested": None}
+
+
 @router.get("/schwab/balances")
 async def get_balances(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
-        select(SchwabAccount).where(
-            SchwabAccount.user_id == current_user.id,
-            SchwabAccount.refresh_token_enc.isnot(None),
-            SchwabAccount.enabled == True,
-        )
+        select(SchwabAccount).where(SchwabAccount.user_id == current_user.id)
     )
     accounts = result.scalars().all()
 
     balances = []
     for account in accounts:
+        if not account.enabled:
+            balances.append({
+                "account_id": account.id,
+                "account_name": account.account_name,
+                "account_number": account.account_number,
+                "connected": account.refresh_token_enc is not None,
+                "enabled": False,
+            })
+            continue
+        if not account.refresh_token_enc:
+            balances.append({
+                "account_id": account.id,
+                "account_name": account.account_name,
+                "account_number": account.account_number,
+                "connected": False,
+                "enabled": True,
+            })
+            continue
         client = SchwabClient(
             app_key=current_user.get_app_key(),
             app_secret=current_user.get_app_secret(),
@@ -220,9 +246,24 @@ async def get_balances(
             await db.commit()
 
             account_data = await client.get_all_balances(access_token)
-            balances.append({"account_id": account.id, "account_name": account.account_name, "data": account_data})
+            parsed = _parse_balance(account_data, account.account_number)
+            balances.append({
+                "account_id": account.id,
+                "account_name": account.account_name,
+                "account_number": account.account_number,
+                "connected": True,
+                "enabled": account.enabled,
+                **parsed,
+            })
         except (SchwabAuthError, SchwabAPIError) as e:
-            balances.append({"account_id": account.id, "account_name": account.account_name, "error": str(e)})
+            balances.append({
+                "account_id": account.id,
+                "account_name": account.account_name,
+                "account_number": account.account_number,
+                "connected": False,
+                "enabled": account.enabled,
+                "error": str(e),
+            })
 
     return balances
 
