@@ -23,6 +23,8 @@ class AuthResponse(BaseModel):
 
 class UserUpdate(BaseModel):
     ntfy_topic: Optional[str] = None
+    app_key: Optional[str] = None
+    app_secret: Optional[str] = None
 
 
 class UserProfile(BaseModel):
@@ -31,6 +33,7 @@ class UserProfile(BaseModel):
     email: str
     ntfy_topic: Optional[str]
     schedule_cron: str
+    has_schwab_credentials: bool
     created_at: datetime
 
     class Config:
