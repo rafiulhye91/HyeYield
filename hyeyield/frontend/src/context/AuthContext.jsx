@@ -20,12 +20,10 @@ export function AuthProvider({ children }) {
   }, []);
 
   const login = async (username, password) => {
-    const params = new URLSearchParams();
-    params.append('username', username);
-    params.append('password', password);
-    const res = await api.post('/auth/login', params);
+    const res = await api.post('/auth/login', { username, password });
     localStorage.setItem('token', res.data.access_token);
-    setUser(res.data.user);
+    const me = await api.get('/auth/me');
+    setUser(me.data);
   };
 
   const logout = () => {
