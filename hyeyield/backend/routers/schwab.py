@@ -1,6 +1,6 @@
 import re
 from typing import List, Optional
-from urllib.parse import urlencode
+from urllib.parse import urlencode, unquote
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import delete, select
@@ -159,7 +159,7 @@ async def connect_schwab(
     match = re.search(r"[?&]code=([^&]+)", body.redirect_url)
     if not match:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="No auth code found in redirect URL")
-    code = match.group(1)
+    code = unquote(match.group(1))
 
     import httpx, base64
     app_key = current_user.get_app_key()
