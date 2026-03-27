@@ -47,7 +47,6 @@ const s = {
 export default function Settings() {
   const navigate = useNavigate();
 
-  const [cron, setCron] = useState('');
   const [ntfyTopic, setNtfyTopic] = useState('');
   const [appKey, setAppKey] = useState('');
   const [appSecret, setAppSecret] = useState('');
@@ -57,14 +56,12 @@ export default function Settings() {
   const [accountCount, setAccountCount] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  const [cronMsg, setCronMsg] = useState(null);
   const [ntfyMsg, setNtfyMsg] = useState(null);
   const [schwabMsg, setSchwabMsg] = useState(null);
   const [pwMsg, setPwMsg] = useState(null);
 
   useEffect(() => {
     Promise.all([
-      api.get('/invest/schedule').then((r) => setCron(r.data.schedule_cron || '')),
       api.get('/auth/me').then((r) => {
         setNtfyTopic(r.data.ntfy_topic || '');
         setProfile(r.data);
@@ -76,16 +73,6 @@ export default function Settings() {
   const toast = (set, msg, error = false) => {
     set({ msg, error });
     setTimeout(() => set(null), 3000);
-  };
-
-  const saveCron = async (e) => {
-    e.preventDefault();
-    try {
-      await api.put('/invest/schedule', { schedule_cron: cron });
-      toast(setCronMsg, 'Schedule saved. Next run scheduled.');
-    } catch (err) {
-      toast(setCronMsg, err.response?.data?.detail || 'Failed to save.', true);
-    }
   };
 
   const saveNtfy = async (e) => {
@@ -156,31 +143,12 @@ export default function Settings() {
     }
   };
 
-  const cron$ = cronLabel(cron);
-
   if (loading) return <Layout><p style={{ padding: 20, fontSize: 13, color: '#6B7280' }}>Loading…</p></Layout>;
 
   return (
     <Layout>
       <div style={{ maxWidth: 720, margin: '0 auto', padding: '28px 20px', fontFamily: 'system-ui, -apple-system, sans-serif' }}>
         <div style={{ fontSize: 18, fontWeight: 500, color: '#111827', marginBottom: 20 }}>Settings</div>
-
-        {/* Investment Schedule */}
-        <div style={s.section}>
-          <div style={s.title}>Investment schedule</div>
-          <div style={s.desc}>Cron expression controlling when automatic invest runs happen (America/New_York timezone). Default runs on the 1st and 15th of every month at 9:35 AM.</div>
-          <form onSubmit={saveCron}>
-            <div style={s.row}>
-              <div style={s.label}>Cron expression</div>
-              <input style={{ ...s.input, fontFamily: 'Courier New, monospace' }} value={cron} onChange={(e) => setCron(e.target.value)} />
-              <button type="submit" style={s.btnPrimary}>Save</button>
-            </div>
-          </form>
-          <div style={{ fontSize: 11, color: cron$.ok ? '#166534' : '#991B1B', background: cron$.ok ? '#DCFCE7' : '#FEE2E2', padding: '5px 10px', borderRadius: 8, display: 'inline-block', marginTop: 4 }}>
-            {cron$.text}
-          </div>
-          <Toast {...(cronMsg || {})} />
-        </div>
 
         {/* Push Notifications */}
         <div style={s.section}>
