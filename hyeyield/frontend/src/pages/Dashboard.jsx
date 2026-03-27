@@ -6,7 +6,7 @@ import api from '../api/client';
 // ── helpers ──────────────────────────────────────────────────────────
 const fmt    = (n) => n != null ? `$${Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—';
 const fmtShort = (n) => n != null ? `$${Math.round(n).toLocaleString('en-US')}` : '—';
-const lastFour = (num) => num ? `...${String(num).slice(-4)}` : '';
+const lastThree = (num) => num ? `...${String(num).slice(-3)}` : '';
 const fmtDate  = (d) => d ? new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : null;
 
 const PILL_COLORS = [
@@ -37,14 +37,15 @@ function Badge({ connected, enabled }) {
 function AccountCard({ b, onReconnect }) {
   const hasData = b.connected && b.enabled && b.total_value != null;
   const lastRun = fmtDate(b.last_run);
+  const label = b.account_type || b.account_name;
 
   return (
     <div style={{ background: '#fff', border: '0.5px solid rgba(0,0,0,0.1)', borderRadius: 12, padding: 16 }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 12, gap: 8 }}>
         <div>
-          <div style={{ fontSize: 13, fontWeight: 500, color: '#111827' }}>{b.account_name}</div>
+          <div style={{ fontSize: 13, fontWeight: 500, color: '#111827' }}>{label}</div>
           <div style={{ fontSize: 10, color: '#9CA3AF', marginTop: 2 }}>
-            {lastFour(b.account_number)}{lastRun ? ` · Last run ${lastRun}` : ''}{!b.enabled ? ' · Paused by you' : ''}
+            {lastThree(b.account_number)}{lastRun ? ` · Last run ${lastRun}` : ''}{!b.enabled ? ' · Paused by you' : ''}
           </div>
         </div>
         <Badge connected={b.connected} enabled={b.enabled} />
@@ -94,7 +95,7 @@ function RotationCard({ accounts, rotations }) {
         return (
           <div key={a.account_id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: `${i === 0 ? 0 : 8}px 0 ${i === accounts.length - 1 ? 0 : 8}px`, borderBottom: i < accounts.length - 1 ? '0.5px solid rgba(0,0,0,0.06)' : 'none', gap: 12 }}>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 12, fontWeight: 500, color: '#111827' }}>{a.account_name} {lastFour(a.account_number)}</div>
+              <div style={{ fontSize: 12, fontWeight: 500, color: '#111827' }}>{a.account_type || a.account_name} {lastThree(a.account_number)}</div>
               <div style={{ fontSize: 11, color: '#9CA3AF', marginTop: 2 }}>
                 {a.last_run ? `Last run ${fmtDate(a.last_run)}` : 'Never run'}
               </div>
@@ -236,10 +237,6 @@ export default function Dashboard() {
   const [rotations, setRotations] = useState({});
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [modal, setModal] = useState(null);
-  const [dryResult, setDryResult] = useState(null);
-  const [liveResult, setLiveResult] = useState(null);
-  const [running, setRunning] = useState(false);
 
   const loadData = async () => {
     const r = await api.get('/accounts');
@@ -285,32 +282,6 @@ export default function Dashboard() {
     try { await loadData(); } finally { setRefreshing(false); }
   };
 
-  const runDry = async () => {
-    setRunning(true);
-    try {
-      const res = await api.post('/invest/dry-run');
-      setDryResult(res.data);
-      setModal('dry');
-    } catch (err) {
-      alert(err.response?.data?.detail || 'Dry run failed');
-    } finally {
-      setRunning(false);
-    }
-  };
-
-  const runLive = async () => {
-    setRunning(true);
-    try {
-      const res = await api.post('/invest/live', {}, { headers: { 'X-Confirm-Live': 'true' } });
-      setLiveResult(res.data);
-      setModal('result');
-    } catch (err) {
-      alert(err.response?.data?.detail || 'Live invest failed');
-    } finally {
-      setRunning(false);
-    }
-  };
-
   const disconnected = balances.filter((b) => b.enabled && !b.connected);
 
   const sectionTitle = (text) => (
@@ -328,12 +299,22 @@ export default function Dashboard() {
           <div style={{ background: '#FEF9C3', border: '0.5px solid #EF9F27', borderRadius: 10, padding: '10px 16px', marginBottom: 18, display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 12, color: '#633806', gap: 12 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <div style={{ width: 16, height: 16, background: '#EF9F27', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 10, fontWeight: 700, flexShrink: 0 }}>!</div>
-              <span>{disconnected.map((b) => `${b.account_name} ${lastFour(b.account_number)}`).join(', ')} — Schwab connection expired. Invest runs paused.</span>
+              <span>{disconnected.map((b) => `${b.account_type || b.account_name} ${lastThree(b.account_number)}`).join(', ')} — Schwab connection expired. Invest runs paused.</span>
             </div>
             <button onClick={() => navigate('/settings')} style={{ background: '#EF9F27', color: '#412402', border: 'none', borderRadius: 6, padding: '5px 12px', fontSize: 11, cursor: 'pointer', fontWeight: 500, whiteSpace: 'nowrap', fontFamily: 'inherit' }}>
               Reconnect now
             </button>
           </div>
+        )}
+
+        {/* Next Investment Schedule */}
+        {sectionTitle('Next Investment Schedule')}
+        {connectedAccounts.length === 0 || Object.values(rotations).every((r) => r.length === 0) ? (
+          <div style={{ background: '#fff', border: '0.5px solid rgba(0,0,0,0.1)', borderRadius: 12, padding: '18px 16px', marginBottom: 22, fontSize: 12, color: '#9CA3AF', textAlign: 'center' }}>
+            No investment scheduled
+          </div>
+        ) : (
+          <RotationCard accounts={connectedAccounts} rotations={rotations} />
         )}
 
         {/* Balance cards */}
@@ -345,32 +326,13 @@ export default function Dashboard() {
           }
         </div>
 
-        {/* Rotation */}
-        {connectedAccounts.length > 0 && (
-          <>
-            {sectionTitle('Next run order')}
-            <RotationCard accounts={connectedAccounts} rotations={rotations} />
-          </>
-        )}
-
         {/* Actions */}
-        <div style={{ display: 'flex', gap: 10, marginBottom: 24 }}>
-          <button onClick={runDry} disabled={running} style={{ flex: 1, padding: 11, background: '#fff', border: '0.5px solid rgba(0,0,0,0.15)', borderRadius: 8, fontSize: 13, cursor: 'pointer', color: '#374151', fontWeight: 500, fontFamily: 'inherit' }}>
-            {running && modal === null ? 'Running…' : 'Run dry run'}
-          </button>
-          <button onClick={() => setModal('confirm')} disabled={running} style={{ flex: 1, padding: 11, background: '#2563eb', border: 'none', borderRadius: 8, fontSize: 13, cursor: 'pointer', color: '#fff', fontWeight: 500, fontFamily: 'inherit' }}>
-            Invest now (live)
-          </button>
-          <button onClick={handleRefresh} disabled={refreshing} style={{ padding: '11px 16px', background: '#fff', border: '0.5px solid rgba(0,0,0,0.15)', borderRadius: 8, fontSize: 12, cursor: 'pointer', color: '#6B7280', fontFamily: 'inherit' }}>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 24 }}>
+          <button onClick={handleRefresh} disabled={refreshing} style={{ padding: '9px 16px', background: '#fff', border: '0.5px solid rgba(0,0,0,0.15)', borderRadius: 8, fontSize: 12, cursor: 'pointer', color: '#6B7280', fontFamily: 'inherit' }}>
             {refreshing ? 'Refreshing…' : 'Refresh'}
           </button>
         </div>
       </div>
-
-      {/* Modals */}
-      {modal === 'dry'     && <DryRunModal result={dryResult} onClose={() => setModal(null)} onInvest={() => setModal('confirm')} />}
-      {modal === 'confirm' && <ConfirmModal onCancel={() => setModal(null)} onConfirm={runLive} running={running} />}
-      {modal === 'result'  && <ResultsModal result={liveResult} onClose={() => { setModal(null); loadData(); }} />}
     </Layout>
   );
 }
