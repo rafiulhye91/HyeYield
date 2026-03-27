@@ -38,6 +38,7 @@ const css = {
     padding: '32px 24px',
     display: 'flex',
     flexDirection: 'column',
+    minHeight: 580,
   },
   right: {
     flex: 1,
@@ -47,6 +48,8 @@ const css = {
     padding: '32px 28px',
     display: 'flex',
     flexDirection: 'column',
+    minHeight: 580,
+    overflowY: 'auto',
   },
   input: {
     width: '100%',
