@@ -287,6 +287,22 @@ export default function Dashboard() {
     }).catch(() => setLoading(false));
   }, []);
 
+  const [syncing, setSyncing] = useState(false);
+
+  const handleSync = async () => {
+    setSyncing(true);
+    try {
+      await api.post('/schwab/sync');
+      const r = await api.get('/accounts');
+      const accounts = r.data;
+      setBalances((prev) => prev.map((c) => {
+        const a = accounts.find((x) => x.id === c.account_id);
+        return a ? { ...c, account_name: a.account_name, account_type: a.account_type } : c;
+      }));
+    } catch (_) {}
+    setSyncing(false);
+  };
+
   const disconnected = balances.filter((b) => b.enabled && !b.connected);
 
   const sectionTitle = (text) => (
@@ -323,7 +339,12 @@ export default function Dashboard() {
         )}
 
         {/* Balance cards */}
-        {sectionTitle('Account balances')}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+          {sectionTitle('Account balances')}
+          <button onClick={handleSync} disabled={syncing} style={{ padding: '4px 12px', background: '#fff', border: '0.5px solid rgba(0,0,0,0.15)', borderRadius: 6, fontSize: 11, cursor: 'pointer', color: '#6B7280', fontFamily: 'inherit', marginBottom: 10 }}>
+            {syncing ? 'Syncing…' : 'Sync accounts'}
+          </button>
+        </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 12, marginBottom: 22 }}>
           {balances.length === 0
             ? <p style={{ fontSize: 13, color: '#9CA3AF' }}>No accounts yet. Connect Schwab in Settings.</p>
