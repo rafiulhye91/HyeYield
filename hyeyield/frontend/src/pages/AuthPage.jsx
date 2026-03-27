@@ -1,7 +1,14 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import api from '../api/client';
+
+const fadeIn = `
+  @keyframes fadeSlideIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+`;
 
 const FEATURES = [
   'Automated investing across your Schwab accounts.',
@@ -30,6 +37,7 @@ const css = {
     borderRadius: 12,
     overflow: 'hidden',
     boxShadow: '0 1px 4px rgba(0,0,0,0.1)',
+    transition: 'height 0.3s ease',
   },
   left: {
     width: 240,
@@ -48,8 +56,8 @@ const css = {
     padding: '32px 28px',
     display: 'flex',
     flexDirection: 'column',
-    minHeight: 580,
     overflowY: 'auto',
+    transition: 'all 0.3s ease',
   },
   input: {
     width: '100%',
@@ -166,6 +174,7 @@ export default function AuthPage({ initialTab = 'login' }) {
 
   return (
     <div style={css.body}>
+      <style>{fadeIn}</style>
       <div style={css.container}>
 
         {/* Left branding panel */}
@@ -191,7 +200,7 @@ export default function AuthPage({ initialTab = 'login' }) {
 
           {/* Login panel */}
           {tab === 'login' && (
-            <form onSubmit={handleLogin}>
+            <form onSubmit={handleLogin} style={{ animation: 'fadeSlideIn 0.25s ease' }}>
               {lError && (
                 <div style={{ fontSize: 12, color: '#991B1B', background: '#FEE2E2', border: '0.5px solid #F09595', padding: '8px 10px', borderRadius: 8, marginBottom: 14 }}>
                   {lError}
@@ -217,7 +226,7 @@ export default function AuthPage({ initialTab = 'login' }) {
 
           {/* Register panel */}
           {tab === 'register' && (
-            <form onSubmit={handleRegister}>
+            <form onSubmit={handleRegister} style={{ animation: 'fadeSlideIn 0.25s ease' }}>
               {rError && (
                 <div style={{ fontSize: 12, color: '#991B1B', background: '#FEE2E2', border: '0.5px solid #F09595', padding: '8px 10px', borderRadius: 8, marginBottom: 14 }}>
                   {rError}
