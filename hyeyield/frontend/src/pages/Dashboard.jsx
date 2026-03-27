@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
 import { useDashboard } from '../context/DashboardContext';
@@ -33,7 +34,18 @@ function Badge({ connected, enabled }) {
 }
 
 // ── Account card ──────────────────────────────────────────────────────
-function AccountCard({ b, onReconnect, balancesLoading }) {
+const EyeOpen = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+  </svg>
+);
+const EyeOff = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/>
+  </svg>
+);
+
+function AccountCard({ b, onReconnect, balancesLoading, hidden }) {
   const hasData = b.connected && b.enabled && b.total_value != null;
   const lastRun = fmtDate(b.last_run);
   const dim = (val) => balancesLoading && !hasData
@@ -57,36 +69,38 @@ function AccountCard({ b, onReconnect, balancesLoading }) {
         <Badge connected={b.connected} enabled={b.enabled} />
       </div>
 
-      {(!b.connected || !b.enabled) && !hasData ? (
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '20px 0', gap: 8 }}>
-          <div style={{ fontSize: 11, color: '#9CA3AF', textAlign: 'center' }}>
-            {!b.connected ? 'Balances unavailable.\nReconnect to resume investing.' : 'Invest runs paused for this account.'}
+      <div style={{ filter: hidden ? 'blur(6px)' : 'none', userSelect: hidden ? 'none' : 'auto', transition: 'filter 0.2s ease', pointerEvents: hidden ? 'none' : 'auto' }}>
+        {(!b.connected || !b.enabled) && !hasData ? (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '20px 0', gap: 8 }}>
+            <div style={{ fontSize: 11, color: '#9CA3AF', textAlign: 'center' }}>
+              {!b.connected ? 'Balances unavailable.\nReconnect to resume investing.' : 'Invest runs paused for this account.'}
+            </div>
+            {!b.connected && (
+              <button onClick={onReconnect} style={{ padding: '5px 12px', background: '#DBEAFE', color: '#1E40AF', border: '0.5px solid #B5D4F4', borderRadius: 6, fontSize: 11, cursor: 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>
+                Reconnect Schwab →
+              </button>
+            )}
           </div>
-          {!b.connected && (
-            <button onClick={onReconnect} style={{ padding: '5px 12px', background: '#DBEAFE', color: '#1E40AF', border: '0.5px solid #B5D4F4', borderRadius: 6, fontSize: 11, cursor: 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>
-              Reconnect Schwab →
-            </button>
-          )}
-        </div>
-      ) : (
-        <>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-            <span style={{ fontSize: 11, color: '#9CA3AF' }}>Total value</span>
-            <span style={{ fontSize: 11, fontWeight: 500, color: '#111827' }}>{dim(fmt(b.total_value))}</span>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-            <span style={{ fontSize: 11, color: '#9CA3AF' }}>Cash available</span>
-            <span style={{ fontSize: 11, fontWeight: 500, color: b.cash > 0 ? '#166534' : '#111827' }}>{dim(fmt(b.cash))}</span>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-            <span style={{ fontSize: 11, color: '#9CA3AF' }}>Invested</span>
-            <span style={{ fontSize: 11, fontWeight: 500, color: '#111827' }}>{dim(fmt(b.invested))}</span>
-          </div>
-          <hr style={{ border: 'none', borderTop: '0.5px solid rgba(0,0,0,0.07)', margin: '10px 0' }} />
-          <div style={{ fontSize: 22, fontWeight: 500, color: b.enabled ? '#111827' : '#9CA3AF' }}>{dim(fmtShort(b.total_value))}</div>
-          <div style={{ fontSize: 10, color: '#9CA3AF', marginTop: 2 }}>{b.enabled ? 'total portfolio value' : 'invest runs paused'}</div>
-        </>
-      )}
+        ) : (
+          <>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+              <span style={{ fontSize: 11, color: '#9CA3AF' }}>Total value</span>
+              <span style={{ fontSize: 11, fontWeight: 500, color: '#111827' }}>{dim(fmt(b.total_value))}</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+              <span style={{ fontSize: 11, color: '#9CA3AF' }}>Cash available</span>
+              <span style={{ fontSize: 11, fontWeight: 500, color: b.cash > 0 ? '#166534' : '#111827' }}>{dim(fmt(b.cash))}</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+              <span style={{ fontSize: 11, color: '#9CA3AF' }}>Invested</span>
+              <span style={{ fontSize: 11, fontWeight: 500, color: '#111827' }}>{dim(fmt(b.invested))}</span>
+            </div>
+            <hr style={{ border: 'none', borderTop: '0.5px solid rgba(0,0,0,0.07)', margin: '10px 0' }} />
+            <div style={{ fontSize: 22, fontWeight: 500, color: b.enabled ? '#111827' : '#9CA3AF' }}>{dim(fmtShort(b.total_value))}</div>
+            <div style={{ fontSize: 10, color: '#9CA3AF', marginTop: 2 }}>{b.enabled ? 'total portfolio value' : 'invest runs paused'}</div>
+          </>
+        )}
+      </div>
     </div>
   );
 }
@@ -239,6 +253,7 @@ function ResultsModal({ result, onClose }) {
 export default function Dashboard() {
   const navigate = useNavigate();
   const { balances, connectedAccounts, rotations, loading, balancesLoading, syncing, sync } = useDashboard();
+  const [hidden, setHidden] = useState(true);
 
   const disconnected = balances.filter((b) => b.enabled && !b.connected);
 
@@ -278,7 +293,12 @@ export default function Dashboard() {
 
         {/* Balance cards */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-          {sectionTitle('Account balances')}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            {sectionTitle('Account balances')}
+            <button onClick={() => setHidden((h) => !h)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF', padding: '0 0 10px', display: 'flex', alignItems: 'center' }}>
+              {hidden ? <EyeOff /> : <EyeOpen />}
+            </button>
+          </div>
           <button onClick={sync} disabled={syncing} style={{ padding: '4px 12px', background: '#fff', border: '0.5px solid rgba(0,0,0,0.15)', borderRadius: 6, fontSize: 11, cursor: 'pointer', color: '#6B7280', fontFamily: 'inherit', marginBottom: 10 }}>
             {syncing ? 'Syncing…' : 'Sync accounts'}
           </button>
@@ -286,7 +306,7 @@ export default function Dashboard() {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 12, marginBottom: 22 }}>
           {balances.length === 0
             ? <p style={{ fontSize: 13, color: '#9CA3AF' }}>No accounts yet. Connect Schwab in Settings.</p>
-            : balances.map((b) => <AccountCard key={b.account_id} b={b} onReconnect={() => navigate('/settings')} balancesLoading={balancesLoading} />)
+            : balances.map((b) => <AccountCard key={b.account_id} b={b} onReconnect={() => navigate('/settings')} balancesLoading={balancesLoading} hidden={hidden} />)
           }
         </div>
 
