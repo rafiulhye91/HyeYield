@@ -34,10 +34,13 @@ function Badge({ connected, enabled }) {
 }
 
 // ── Account card ──────────────────────────────────────────────────────
-function AccountCard({ b, onReconnect }) {
+function AccountCard({ b, onReconnect, balancesLoading }) {
   const hasData = b.connected && b.enabled && b.total_value != null;
   const lastRun = fmtDate(b.last_run);
   const label = b.account_type || b.account_name;
+  const dim = (val) => balancesLoading && !hasData
+    ? <span style={{ color: '#D1D5DB' }}>—</span>
+    : val;
 
   return (
     <div style={{ background: '#fff', border: '0.5px solid rgba(0,0,0,0.1)', borderRadius: 12, padding: 16 }}>
@@ -66,18 +69,18 @@ function AccountCard({ b, onReconnect }) {
         <>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
             <span style={{ fontSize: 11, color: '#9CA3AF' }}>Total value</span>
-            <span style={{ fontSize: 11, fontWeight: 500, color: '#111827' }}>{fmt(b.total_value)}</span>
+            <span style={{ fontSize: 11, fontWeight: 500, color: '#111827' }}>{dim(fmt(b.total_value))}</span>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
             <span style={{ fontSize: 11, color: '#9CA3AF' }}>Cash available</span>
-            <span style={{ fontSize: 11, fontWeight: 500, color: b.cash > 0 ? '#166534' : '#111827' }}>{fmt(b.cash)}</span>
+            <span style={{ fontSize: 11, fontWeight: 500, color: b.cash > 0 ? '#166534' : '#111827' }}>{dim(fmt(b.cash))}</span>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
             <span style={{ fontSize: 11, color: '#9CA3AF' }}>Invested</span>
-            <span style={{ fontSize: 11, fontWeight: 500, color: '#111827' }}>{fmt(b.invested)}</span>
+            <span style={{ fontSize: 11, fontWeight: 500, color: '#111827' }}>{dim(fmt(b.invested))}</span>
           </div>
           <hr style={{ border: 'none', borderTop: '0.5px solid rgba(0,0,0,0.07)', margin: '10px 0' }} />
-          <div style={{ fontSize: 22, fontWeight: 500, color: b.enabled ? '#111827' : '#9CA3AF' }}>{fmtShort(b.total_value)}</div>
+          <div style={{ fontSize: 22, fontWeight: 500, color: b.enabled ? '#111827' : '#9CA3AF' }}>{dim(fmtShort(b.total_value))}</div>
           <div style={{ fontSize: 10, color: '#9CA3AF', marginTop: 2 }}>{b.enabled ? 'total portfolio value' : 'invest runs paused'}</div>
         </>
       )}
@@ -236,51 +239,49 @@ export default function Dashboard() {
   const [connectedAccounts, setConnectedAccounts] = useState([]);
   const [rotations, setRotations] = useState({});
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+  const [balancesLoading, setBalancesLoading] = useState(true);
 
-  const loadData = async () => {
-    const r = await api.get('/accounts');
-    const accounts = r.data;
+  useEffect(() => {
+    // Phase 1: load accounts + allocations from local DB — renders immediately
+    api.get('/accounts').then(async (r) => {
+      const accounts = r.data;
+      const cards = accounts.map((a) => ({
+        account_id: a.id,
+        account_name: a.account_name,
+        account_number: a.account_number,
+        account_type: a.account_type,
+        connected: a.connected,
+        enabled: a.enabled,
+        last_run: a.last_run,
+        rotation_state: a.rotation_state,
+      }));
+      setBalances(cards);
 
-    let balanceMap = {};
-    try {
-      const br = await api.get('/schwab/balances');
-      br.data.forEach((b) => { balanceMap[b.account_id] = b; });
-    } catch (_) {}
+      const connected = accounts.filter((a) => a.connected && a.enabled);
+      setConnectedAccounts(connected);
 
-    const cards = accounts.map((a) => ({
-      account_id: a.id,
-      account_name: a.account_name,
-      account_number: a.account_number,
-      account_type: a.account_type,
-      connected: a.connected,
-      enabled: a.enabled,
-      last_run: a.last_run,
-      rotation_state: a.rotation_state,
-      ...(balanceMap[a.id] || {}),
-    }));
-    setBalances(cards);
+      const allocs = await Promise.all(
+        connected.map((a) =>
+          api.get(`/accounts/${a.id}/allocations`)
+            .then((ar) => ({ id: a.id, symbols: ar.data.map((al) => al.symbol) }))
+            .catch(() => ({ id: a.id, symbols: [] }))
+        )
+      );
+      const map = {};
+      allocs.forEach(({ id, symbols }) => { map[id] = symbols; });
+      setRotations(map);
+      setLoading(false);
 
-    const connected = accounts.filter((a) => a.connected && a.enabled);
-    setConnectedAccounts(connected);
-    const allocs = await Promise.all(
-      connected.map((a) =>
-        api.get(`/accounts/${a.id}/allocations`)
-          .then((ar) => ({ id: a.id, symbols: ar.data.map((al) => al.symbol) }))
-          .catch(() => ({ id: a.id, symbols: [] }))
-      )
-    );
-    const map = {};
-    allocs.forEach(({ id, symbols }) => { map[id] = symbols; });
-    setRotations(map);
-  };
-
-  useEffect(() => { loadData().finally(() => setLoading(false)); }, []);
-
-  const handleRefresh = async () => {
-    setRefreshing(true);
-    try { await loadData(); } finally { setRefreshing(false); }
-  };
+      // Phase 2: fetch balances from Schwab API in background
+      try {
+        const br = await api.get('/schwab/balances');
+        const balanceMap = {};
+        br.data.forEach((b) => { balanceMap[b.account_id] = b; });
+        setBalances((prev) => prev.map((c) => ({ ...c, ...(balanceMap[c.account_id] || {}) })));
+      } catch (_) {}
+      setBalancesLoading(false);
+    }).catch(() => setLoading(false));
+  }, []);
 
   const disconnected = balances.filter((b) => b.enabled && !b.connected);
 
@@ -322,16 +323,10 @@ export default function Dashboard() {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 12, marginBottom: 22 }}>
           {balances.length === 0
             ? <p style={{ fontSize: 13, color: '#9CA3AF' }}>No accounts yet. Connect Schwab in Settings.</p>
-            : balances.map((b) => <AccountCard key={b.account_id} b={b} onReconnect={() => navigate('/settings')} />)
+            : balances.map((b) => <AccountCard key={b.account_id} b={b} onReconnect={() => navigate('/settings')} balancesLoading={balancesLoading} />)
           }
         </div>
 
-        {/* Actions */}
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 24 }}>
-          <button onClick={handleRefresh} disabled={refreshing} style={{ padding: '9px 16px', background: '#fff', border: '0.5px solid rgba(0,0,0,0.15)', borderRadius: 8, fontSize: 12, cursor: 'pointer', color: '#6B7280', fontFamily: 'inherit' }}>
-            {refreshing ? 'Refreshing…' : 'Refresh'}
-          </button>
-        </div>
       </div>
     </Layout>
   );
