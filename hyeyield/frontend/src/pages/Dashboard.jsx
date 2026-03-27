@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
 import api from '../api/client';
 
 // ── helpers ──────────────────────────────────────────────────────────
-const fmt = (n) => n != null ? `$${Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—';
+const fmt    = (n) => n != null ? `$${Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—';
 const fmtShort = (n) => n != null ? `$${Math.round(n).toLocaleString('en-US')}` : '—';
-const lastFour = (num) => num ? `...${String(num).slice(-3)}` : '';
+const lastFour = (num) => num ? `...${String(num).slice(-4)}` : '';
+const fmtDate  = (d) => d ? new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : null;
 
 const PILL_COLORS = [
   { bg: '#DBEAFE', color: '#1E40AF' },
@@ -15,62 +17,96 @@ const PILL_COLORS = [
   { bg: '#FEE2E2', color: '#991B1B' },
 ];
 
-// ── sub-components ───────────────────────────────────────────────────
+const orderStatusStyle = (status) => {
+  if (!status) return { background: '#F3F4F6', color: '#6B7280' };
+  const s = status.toUpperCase();
+  if (s === 'FILLED')   return { background: '#DCFCE7', color: '#166534' };
+  if (s === 'WORKING')  return { background: '#FEF9C3', color: '#854F0B' };
+  if (s === 'REJECTED' || s === 'FAILED') return { background: '#FEE2E2', color: '#991B1B' };
+  return { background: '#F3F4F6', color: '#6B7280' };
+};
+
+// ── Badge ─────────────────────────────────────────────────────────────
 function Badge({ connected, enabled }) {
-  if (!enabled) return <span style={{ fontSize: '10px', padding: '2px 7px', borderRadius: '99px', fontWeight: 500, background: '#F3F4F6', color: '#6B7280' }}>Disabled</span>;
-  if (!connected) return <span style={{ fontSize: '10px', padding: '2px 7px', borderRadius: '99px', fontWeight: 500, background: '#FEE2E2', color: '#991B1B' }}>Disconnected</span>;
-  return <span style={{ fontSize: '10px', padding: '2px 7px', borderRadius: '99px', fontWeight: 500, background: '#DCFCE7', color: '#166534' }}>Connected</span>;
+  if (!enabled)    return <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 99, fontWeight: 500, background: '#F3F4F6', color: '#6B7280' }}>Disabled</span>;
+  if (!connected)  return <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 99, fontWeight: 500, background: '#FEE2E2', color: '#991B1B' }}>Token expired</span>;
+  return <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 99, fontWeight: 500, background: '#DCFCE7', color: '#166534' }}>Connected</span>;
 }
 
-function StatRow({ label, value, green }) {
-  return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
-      <span style={{ fontSize: '11px', color: 'var(--color-text-tertiary)' }}>{label}</span>
-      <span style={{ fontSize: '11px', fontWeight: 500, color: green ? '#166534' : 'var(--color-text-primary)' }}>{value}</span>
-    </div>
-  );
-}
-
-function AccountCard({ b }) {
+// ── Account card ──────────────────────────────────────────────────────
+function AccountCard({ b, onReconnect }) {
   const hasData = b.connected && b.enabled && b.total_value != null;
+  const lastRun = fmtDate(b.last_run);
+
   return (
-    <div style={{ background: 'var(--color-background-primary)', border: '0.5px solid var(--color-border-tertiary)', borderRadius: 'var(--border-radius-lg)', padding: '14px 16px' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
-        <span style={{ fontSize: '13px', fontWeight: 500 }}>{b.account_name} {lastFour(b.account_number)}</span>
+    <div style={{ background: '#fff', border: '0.5px solid rgba(0,0,0,0.1)', borderRadius: 12, padding: 16 }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 12, gap: 8 }}>
+        <div>
+          <div style={{ fontSize: 13, fontWeight: 500, color: '#111827' }}>{b.account_name}</div>
+          <div style={{ fontSize: 10, color: '#9CA3AF', marginTop: 2 }}>
+            {lastFour(b.account_number)}{lastRun ? ` · Last run ${lastRun}` : ''}{!b.enabled ? ' · Paused by you' : ''}
+          </div>
+        </div>
         <Badge connected={b.connected} enabled={b.enabled} />
       </div>
-      <StatRow label="Total value" value={hasData ? fmt(b.total_value) : '—'} />
-      <StatRow label="Cash available" value={hasData ? fmt(b.cash) : '—'} green={hasData && b.cash > 0} />
-      <StatRow label={b.enabled ? 'Invested' : 'Status'} value={b.enabled ? (hasData ? fmt(b.invested) : '—') : 'Paused by you'} />
-      {hasData && (
+
+      {(!b.connected || !b.enabled) && !hasData ? (
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '20px 0', gap: 8 }}>
+          <div style={{ fontSize: 11, color: '#9CA3AF', textAlign: 'center' }}>
+            {!b.connected ? 'Balances unavailable.\nReconnect to resume investing.' : 'Invest runs paused for this account.'}
+          </div>
+          {!b.connected && (
+            <button onClick={onReconnect} style={{ padding: '5px 12px', background: '#DBEAFE', color: '#1E40AF', border: '0.5px solid #B5D4F4', borderRadius: 6, fontSize: 11, cursor: 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>
+              Reconnect Schwab →
+            </button>
+          )}
+        </div>
+      ) : (
         <>
-          <div style={{ fontSize: '20px', fontWeight: 500, marginTop: '8px' }}>{fmtShort(b.total_value)}</div>
-          <div style={{ fontSize: '10px', color: 'var(--color-text-tertiary)', marginTop: '1px' }}>total portfolio value</div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+            <span style={{ fontSize: 11, color: '#9CA3AF' }}>Total value</span>
+            <span style={{ fontSize: 11, fontWeight: 500, color: '#111827' }}>{fmt(b.total_value)}</span>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+            <span style={{ fontSize: 11, color: '#9CA3AF' }}>Cash available</span>
+            <span style={{ fontSize: 11, fontWeight: 500, color: b.cash > 0 ? '#166534' : '#111827' }}>{fmt(b.cash)}</span>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+            <span style={{ fontSize: 11, color: '#9CA3AF' }}>Invested</span>
+            <span style={{ fontSize: 11, fontWeight: 500, color: '#111827' }}>{fmt(b.invested)}</span>
+          </div>
+          <hr style={{ border: 'none', borderTop: '0.5px solid rgba(0,0,0,0.07)', margin: '10px 0' }} />
+          <div style={{ fontSize: 22, fontWeight: 500, color: b.enabled ? '#111827' : '#9CA3AF' }}>{fmtShort(b.total_value)}</div>
+          <div style={{ fontSize: 10, color: '#9CA3AF', marginTop: 2 }}>{b.enabled ? 'total portfolio value' : 'invest runs paused'}</div>
         </>
       )}
     </div>
   );
 }
 
+// ── Rotation card ─────────────────────────────────────────────────────
 function RotationCard({ accounts, rotations }) {
   if (!accounts.length) return null;
   return (
-    <div style={{ background: 'var(--color-background-primary)', border: '0.5px solid var(--color-border-tertiary)', borderRadius: 'var(--border-radius-lg)', padding: '14px 16px', marginBottom: '20px' }}>
+    <div style={{ background: '#fff', border: '0.5px solid rgba(0,0,0,0.1)', borderRadius: 12, padding: 16, marginBottom: 22 }}>
       {accounts.map((a, i) => {
         const rot = rotations[a.account_id] || [];
         return (
-          <div key={a.account_id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: i < accounts.length - 1 ? '8px' : 0, marginBottom: i < accounts.length - 1 ? '8px' : 0, borderBottom: i < accounts.length - 1 ? '0.5px solid var(--color-border-tertiary)' : 'none' }}>
-            <div>
-              <div style={{ fontSize: '12px', fontWeight: 500 }}>{a.account_name} {lastFour(a.account_number)}</div>
-              <div style={{ fontSize: '11px', color: 'var(--color-text-tertiary)', marginTop: '1px' }}>
-                Run #{a.rotation_state + 1}{a.last_run ? ` · Last run ${new Date(a.last_run).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} at ${new Date(a.last_run).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}` : ''}
+          <div key={a.account_id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: `${i === 0 ? 0 : 8}px 0 ${i === accounts.length - 1 ? 0 : 8}px`, borderBottom: i < accounts.length - 1 ? '0.5px solid rgba(0,0,0,0.06)' : 'none', gap: 12 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 12, fontWeight: 500, color: '#111827' }}>{a.account_name} {lastFour(a.account_number)}</div>
+              <div style={{ fontSize: 11, color: '#9CA3AF', marginTop: 2 }}>
+                {a.last_run ? `Last run ${fmtDate(a.last_run)}` : 'Never run'}
               </div>
             </div>
-            <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+            <span style={{ fontSize: 10, color: '#9CA3AF', background: '#F9FAFB', border: '0.5px solid rgba(0,0,0,0.08)', borderRadius: 99, padding: '2px 8px', flexShrink: 0 }}>
+              Run #{(a.rotation_state || 0) + 1}
+            </span>
+            <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexShrink: 0 }}>
               {rot.map((sym, idx) => (
-                <span key={sym}>
-                  <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '99px', fontWeight: 500, background: PILL_COLORS[idx % PILL_COLORS.length].bg, color: PILL_COLORS[idx % PILL_COLORS.length].color }}>{sym}</span>
-                  {idx < rot.length - 1 && <span style={{ fontSize: '10px', color: 'var(--color-text-tertiary)', margin: '0 2px' }}>→</span>}
+                <span key={sym} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <span style={{ fontSize: 11, padding: '3px 9px', borderRadius: 99, fontWeight: 500, background: PILL_COLORS[idx % PILL_COLORS.length].bg, color: PILL_COLORS[idx % PILL_COLORS.length].color }}>{sym}</span>
+                  {idx < rot.length - 1 && <span style={{ fontSize: 10, color: '#D1D5DB' }}>→</span>}
                 </span>
               ))}
             </div>
@@ -81,33 +117,49 @@ function RotationCard({ accounts, rotations }) {
   );
 }
 
+// ── Modals ────────────────────────────────────────────────────────────
+const overlayStyle = { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: 20 };
+const modalStyle   = { background: '#fff', borderRadius: 12, padding: '22px 24px', width: '100%', maxWidth: 400, border: '0.5px solid rgba(0,0,0,0.1)' };
+
 function DryRunModal({ result, onClose, onInvest }) {
   if (!result) return null;
   return (
-    <div style={{ background: 'rgba(0,0,0,0.45)', borderRadius: 'var(--border-radius-lg)', padding: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '8px' }}>
-      <div style={{ background: 'var(--color-background-primary)', borderRadius: 'var(--border-radius-lg)', padding: '20px', width: '340px', border: '0.5px solid var(--color-border-tertiary)' }}>
-        <div style={{ background: '#DBEAFE', borderRadius: 'var(--border-radius-md)', padding: '8px 12px', textAlign: 'center', fontSize: '11px', fontWeight: 500, color: '#1E40AF', marginBottom: '12px' }}>DRY RUN — No orders were placed</div>
-        <div style={{ fontSize: '14px', fontWeight: 500, marginBottom: '6px' }}>Simulated results</div>
+    <div style={overlayStyle} onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div style={modalStyle}>
+        <div style={{ background: '#DBEAFE', borderRadius: 8, padding: '9px 14px', textAlign: 'center', fontSize: 12, fontWeight: 500, color: '#1E40AF', marginBottom: 14, letterSpacing: '0.02em' }}>DRY RUN — No orders were placed</div>
+        <div style={{ fontSize: 14, fontWeight: 500, color: '#111827', marginBottom: 6 }}>Simulated results</div>
         {result.map((acct, i) => (
           <div key={i}>
-            <div style={{ fontSize: '12px', color: 'var(--color-text-secondary)', marginBottom: '10px' }}>
-              {acct.account_name} {lastFour(acct.account_number)} · {fmt(acct.cash_before)} available · Run #{acct.rotation_used + 1}
+            <div style={{ fontSize: 12, color: '#6B7280', marginBottom: 10 }}>
+              {acct.account_name} {lastFour(acct.account_number)} · {fmt(acct.cash_before)} available · Run #{(acct.rotation_used || 0) + 1}
             </div>
             {acct.error
-              ? <div style={{ color: '#991B1B', fontSize: '12px', marginBottom: '8px' }}>{acct.error}</div>
+              ? <div style={{ color: '#991B1B', fontSize: 12, marginBottom: 8 }}>{acct.error}</div>
               : acct.orders.map((o, j) => (
-                <div key={j} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', borderBottom: '0.5px solid var(--color-border-tertiary)', fontSize: '12px' }}>
-                  <span style={{ fontWeight: 500 }}>{o.symbol}</span>
-                  <span style={{ color: 'var(--color-text-secondary)' }}>{o.shares} share{o.shares !== 1 ? 's' : ''} @ {o.price ? `$${o.price.toFixed(2)}` : '—'}</span>
-                  <span style={{ fontSize: '10px', padding: '2px 7px', borderRadius: '99px', fontWeight: 500, background: '#DCFCE7', color: '#166534' }}>{o.status}</span>
+                <div key={j} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '7px 0', borderBottom: '0.5px solid rgba(0,0,0,0.06)', fontSize: 12, gap: 8 }}>
+                  <div>
+                    <div style={{ fontWeight: 500, color: '#111827' }}>{o.symbol}</div>
+                    <div style={{ fontSize: 10, color: '#9CA3AF' }}>{o.is_remainder ? 'remainder' : `${o.amount && o.price ? Math.round((o.amount / (o.price * (o.shares || 1))) * 100) : '?'}% allocation`}</div>
+                  </div>
+                  <div style={{ textAlign: 'right' }}>
+                    <div style={{ color: '#6B7280', fontSize: 11 }}>{o.shares} shares @ {o.price ? `$${o.price.toFixed(2)}` : '—'}</div>
+                    <div style={{ fontWeight: 500, color: '#111827' }}>{fmt(o.amount)}</div>
+                  </div>
+                  <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 99, fontWeight: 500, background: '#F3F4F6', color: '#6B7280', flexShrink: 0 }}>DRY RUN</span>
                 </div>
               ))
             }
+            {!acct.error && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, fontWeight: 500, paddingTop: 10, marginTop: 4, borderTop: '0.5px solid rgba(0,0,0,0.08)' }}>
+                <span>Total to invest</span>
+                <span>{fmt(acct.total_invested)}</span>
+              </div>
+            )}
           </div>
         ))}
-        <div style={{ display: 'flex', gap: '8px', marginTop: '14px' }}>
-          <button onClick={onClose} style={{ flex: 1, padding: '7px', border: '0.5px solid var(--color-border-secondary)', background: 'none', borderRadius: 'var(--border-radius-md)', fontSize: '12px', cursor: 'pointer' }}>Close</button>
-          <button onClick={onInvest} style={{ flex: 1, padding: '7px', background: '#2563eb', border: 'none', borderRadius: 'var(--border-radius-md)', fontSize: '12px', color: '#fff', fontWeight: 500, cursor: 'pointer' }}>Invest for real →</button>
+        <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
+          <button onClick={onClose} style={{ flex: 1, padding: 8, border: '0.5px solid rgba(0,0,0,0.15)', background: 'none', borderRadius: 8, fontSize: 12, cursor: 'pointer', color: '#374151', fontFamily: 'inherit' }}>Close</button>
+          <button onClick={onInvest} style={{ flex: 1, padding: 8, background: '#2563eb', border: 'none', borderRadius: 8, fontSize: 12, cursor: 'pointer', color: '#fff', fontWeight: 500, fontFamily: 'inherit' }}>Invest for real →</button>
         </div>
       </div>
     </div>
@@ -116,16 +168,16 @@ function DryRunModal({ result, onClose, onInvest }) {
 
 function ConfirmModal({ onCancel, onConfirm, running }) {
   return (
-    <div style={{ background: 'rgba(0,0,0,0.45)', borderRadius: 'var(--border-radius-lg)', padding: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '8px' }}>
-      <div style={{ background: 'var(--color-background-primary)', borderRadius: 'var(--border-radius-lg)', padding: '20px', width: '340px', border: '0.5px solid var(--color-border-tertiary)' }}>
-        <div style={{ fontSize: '14px', fontWeight: 500, marginBottom: '6px' }}>Place real orders?</div>
-        <div style={{ background: '#FEE2E2', borderRadius: 'var(--border-radius-md)', padding: '8px 12px', fontSize: '11px', color: '#991B1B', marginBottom: '12px' }}>
-          This will place REAL orders using real money in your Schwab account. This cannot be undone.
+    <div style={overlayStyle} onClick={(e) => e.target === e.currentTarget && onCancel()}>
+      <div style={modalStyle}>
+        <div style={{ fontSize: 14, fontWeight: 500, color: '#111827', marginBottom: 6 }}>Place real orders?</div>
+        <div style={{ background: '#FEE2E2', borderRadius: 8, padding: '9px 14px', fontSize: 12, color: '#991B1B', marginBottom: 14, lineHeight: 1.5 }}>
+          This will place <strong>real orders</strong> using real money in your Schwab account. Orders execute immediately at market price and cannot be undone.
         </div>
-        <div style={{ display: 'flex', gap: '8px', marginTop: '14px' }}>
-          <button onClick={onCancel} style={{ flex: 1, padding: '7px', border: '0.5px solid var(--color-border-secondary)', background: 'none', borderRadius: 'var(--border-radius-md)', fontSize: '12px', cursor: 'pointer' }}>Cancel</button>
-          <button onClick={onConfirm} disabled={running} style={{ flex: 1, padding: '7px', background: '#dc2626', border: 'none', borderRadius: 'var(--border-radius-md)', fontSize: '12px', color: '#fff', fontWeight: 500, cursor: 'pointer' }}>
-            {running ? 'Investing…' : 'Yes, invest now'}
+        <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
+          <button onClick={onCancel} style={{ flex: 1, padding: 8, border: '0.5px solid rgba(0,0,0,0.15)', background: 'none', borderRadius: 8, fontSize: 12, cursor: 'pointer', color: '#374151', fontFamily: 'inherit' }}>Cancel</button>
+          <button onClick={onConfirm} disabled={running} style={{ flex: 1, padding: 8, background: '#dc2626', border: 'none', borderRadius: 8, fontSize: 12, cursor: 'pointer', color: '#fff', fontWeight: 500, fontFamily: 'inherit' }}>
+            {running ? 'Placing orders…' : 'Yes, invest now'}
           </button>
         </div>
       </div>
@@ -133,56 +185,105 @@ function ConfirmModal({ onCancel, onConfirm, running }) {
   );
 }
 
-// ── main page ────────────────────────────────────────────────────────
+function ResultsModal({ result, onClose }) {
+  if (!result) return null;
+  return (
+    <div style={overlayStyle} onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div style={modalStyle}>
+        <div style={{ fontSize: 14, fontWeight: 500, color: '#111827', marginBottom: 6 }}>Orders placed</div>
+        {result.map((acct, i) => (
+          <div key={i}>
+            <div style={{ fontSize: 12, color: '#6B7280', marginBottom: 10 }}>
+              {acct.account_name} {lastFour(acct.account_number)} · Run #{(acct.rotation_used || 0) + 1}
+            </div>
+            {acct.error
+              ? <div style={{ color: '#991B1B', fontSize: 12, marginBottom: 8 }}>{acct.error}</div>
+              : acct.orders.map((o, j) => (
+                <div key={j} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '7px 0', borderBottom: '0.5px solid rgba(0,0,0,0.06)', fontSize: 12, gap: 8 }}>
+                  <div>
+                    <div style={{ fontWeight: 500, color: '#111827' }}>{o.symbol}</div>
+                    <div style={{ fontSize: 10, color: '#9CA3AF' }}>{o.shares} shares</div>
+                  </div>
+                  <div style={{ textAlign: 'right' }}>
+                    <div style={{ color: '#6B7280', fontSize: 11 }}>@ {o.price ? `$${o.price.toFixed(2)}` : '—'}</div>
+                    <div style={{ fontWeight: 500, color: '#111827' }}>{fmt(o.amount)}</div>
+                  </div>
+                  <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 99, fontWeight: 500, flexShrink: 0, ...orderStatusStyle(o.status) }}>{o.status}</span>
+                </div>
+              ))
+            }
+            {!acct.error && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, fontWeight: 500, paddingTop: 10, marginTop: 4, borderTop: '0.5px solid rgba(0,0,0,0.08)' }}>
+                <span>Total invested</span>
+                <span>{fmt(acct.total_invested)}</span>
+              </div>
+            )}
+          </div>
+        ))}
+        <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
+          <button onClick={onClose} style={{ flex: 1, padding: 8, border: '0.5px solid rgba(0,0,0,0.15)', background: 'none', borderRadius: 8, fontSize: 12, cursor: 'pointer', color: '#374151', fontFamily: 'inherit' }}>Done</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Main page ─────────────────────────────────────────────────────────
 export default function Dashboard() {
+  const navigate = useNavigate();
   const [balances, setBalances] = useState([]);
   const [connectedAccounts, setConnectedAccounts] = useState([]);
   const [rotations, setRotations] = useState({});
   const [loading, setLoading] = useState(true);
-  const [modal, setModal] = useState(null); // null | 'dry' | 'confirm' | 'result'
+  const [refreshing, setRefreshing] = useState(false);
+  const [modal, setModal] = useState(null);
   const [dryResult, setDryResult] = useState(null);
   const [liveResult, setLiveResult] = useState(null);
   const [running, setRunning] = useState(false);
 
-  useEffect(() => {
-    api.get('/accounts').then(async (r) => {
-      const accounts = r.data;
+  const loadData = async () => {
+    const r = await api.get('/accounts');
+    const accounts = r.data;
 
-      // Fetch balances — merge by account_id, fall back gracefully on error
-      let balanceMap = {};
-      try {
-        const br = await api.get('/schwab/balances');
-        br.data.forEach((b) => { balanceMap[b.account_id] = b; });
-      } catch (_) {}
+    let balanceMap = {};
+    try {
+      const br = await api.get('/schwab/balances');
+      br.data.forEach((b) => { balanceMap[b.account_id] = b; });
+    } catch (_) {}
 
-      // Build unified card data from accounts list (source of truth)
-      const cards = accounts.map((a) => ({
-        account_id: a.id,
-        account_name: a.account_name,
-        account_number: a.account_number,
-        connected: a.connected,
-        enabled: a.enabled,
-        ...(balanceMap[a.id] || {}),
-      }));
-      setBalances(cards);
+    const cards = accounts.map((a) => ({
+      account_id: a.id,
+      account_name: a.account_name,
+      account_number: a.account_number,
+      account_type: a.account_type,
+      connected: a.connected,
+      enabled: a.enabled,
+      last_run: a.last_run,
+      rotation_state: a.rotation_state,
+      ...(balanceMap[a.id] || {}),
+    }));
+    setBalances(cards);
 
-      // Rotation data for connected+enabled accounts
-      const connected = accounts.filter((a) => a.connected && a.enabled);
-      setConnectedAccounts(connected);
-      const allocs = await Promise.all(
-        connected.map((a) =>
-          api.get(`/accounts/${a.id}/allocations`)
-            .then((ar) => ({ id: a.id, symbols: ar.data.map((al) => al.symbol) }))
-            .catch(() => ({ id: a.id, symbols: [] }))
-        )
-      );
-      const map = {};
-      allocs.forEach(({ id, symbols }) => { map[id] = symbols; });
-      setRotations(map);
-    }).finally(() => setLoading(false));
-  }, []);
+    const connected = accounts.filter((a) => a.connected && a.enabled);
+    setConnectedAccounts(connected);
+    const allocs = await Promise.all(
+      connected.map((a) =>
+        api.get(`/accounts/${a.id}/allocations`)
+          .then((ar) => ({ id: a.id, symbols: ar.data.map((al) => al.symbol) }))
+          .catch(() => ({ id: a.id, symbols: [] }))
+      )
+    );
+    const map = {};
+    allocs.forEach(({ id, symbols }) => { map[id] = symbols; });
+    setRotations(map);
+  };
 
-  const disconnected = balances.filter((b) => b.enabled && !b.connected);
+  useEffect(() => { loadData().finally(() => setLoading(false)); }, []);
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try { await loadData(); } finally { setRefreshing(false); }
+  };
 
   const runDry = async () => {
     setRunning(true);
@@ -210,78 +311,66 @@ export default function Dashboard() {
     }
   };
 
-  if (loading) return <Layout><p style={{ color: 'var(--color-text-secondary)' }}>Loading…</p></Layout>;
+  const disconnected = balances.filter((b) => b.enabled && !b.connected);
+
+  const sectionTitle = (text) => (
+    <div style={{ fontSize: 11, fontWeight: 500, color: '#9CA3AF', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{text}</div>
+  );
+
+  if (loading) return <Layout><p style={{ padding: 20, fontSize: 13, color: '#6B7280' }}>Loading…</p></Layout>;
 
   return (
     <Layout>
-      {disconnected.length > 0 && (
-        <div style={{ background: '#FEF9C3', border: '0.5px solid #EF9F27', borderRadius: 'var(--border-radius-md)', padding: '10px 14px', marginBottom: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '12px', color: '#633806' }}>
-          <span>{disconnected.map((b) => `${b.account_name} ${lastFour(b.account_number)}`).join(', ')} — Schwab connection needs renewal. Token expired.</span>
-          <a href="/accounts" style={{ background: '#EF9F27', color: '#412402', border: 'none', borderRadius: 'var(--border-radius-md)', padding: '4px 10px', fontSize: '11px', fontWeight: 500, textDecoration: 'none' }}>Reconnect now</a>
-        </div>
-      )}
+      <div style={{ maxWidth: 900, margin: '0 auto', padding: '24px 20px', fontFamily: 'system-ui, -apple-system, sans-serif' }}>
 
-      <div style={{ fontSize: '13px', fontWeight: 500, color: 'var(--color-text-secondary)', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Account balances</div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: '12px', marginBottom: '20px' }}>
-        {balances.length === 0
-          ? <p style={{ color: 'var(--color-text-tertiary)', fontSize: '13px' }}>No accounts found. Add one in Accounts.</p>
-          : balances.map((b) => <AccountCard key={b.account_id} b={b} />)
-        }
-      </div>
-
-      {connectedAccounts.length > 0 && (
-        <>
-          <div style={{ fontSize: '13px', fontWeight: 500, color: 'var(--color-text-secondary)', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Next run order</div>
-          <RotationCard accounts={connectedAccounts} rotations={rotations} />
-        </>
-      )}
-
-      <div style={{ display: 'flex', gap: '10px', marginBottom: '20px' }}>
-        <button onClick={runDry} disabled={running} style={{ flex: 1, padding: '10px', background: 'var(--color-background-primary)', border: '0.5px solid var(--color-border-secondary)', borderRadius: 'var(--border-radius-md)', fontSize: '13px', fontWeight: 500, cursor: 'pointer', color: 'var(--color-text-primary)' }}>
-          {running && modal === null ? 'Running…' : 'Run dry run'}
-        </button>
-        <button onClick={() => setModal('confirm')} disabled={running} style={{ flex: 1, padding: '10px', background: '#2563eb', border: 'none', borderRadius: 'var(--border-radius-md)', fontSize: '13px', fontWeight: 500, color: '#fff', cursor: 'pointer' }}>
-          Invest now (live)
-        </button>
-      </div>
-
-      {modal === 'dry' && (
-        <DryRunModal
-          result={dryResult}
-          onClose={() => setModal(null)}
-          onInvest={() => setModal('confirm')}
-        />
-      )}
-
-      {modal === 'confirm' && (
-        <ConfirmModal
-          onCancel={() => setModal(null)}
-          onConfirm={runLive}
-          running={running}
-        />
-      )}
-
-      {modal === 'result' && liveResult && (
-        <div style={{ background: 'var(--color-background-primary)', border: '0.5px solid var(--color-border-tertiary)', borderRadius: 'var(--border-radius-lg)', padding: '20px', marginBottom: '8px' }}>
-          <div style={{ fontSize: '14px', fontWeight: 500, marginBottom: '12px' }}>Orders placed</div>
-          {liveResult.map((acct, i) => (
-            <div key={i} style={{ marginBottom: '12px' }}>
-              <div style={{ fontSize: '12px', color: 'var(--color-text-secondary)', marginBottom: '8px' }}>{acct.account_name}</div>
-              {acct.error
-                ? <div style={{ color: '#991B1B', fontSize: '12px' }}>{acct.error}</div>
-                : acct.orders.map((o, j) => (
-                  <div key={j} style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', borderBottom: '0.5px solid var(--color-border-tertiary)', fontSize: '12px' }}>
-                    <span style={{ fontWeight: 500 }}>{o.symbol}</span>
-                    <span style={{ color: 'var(--color-text-secondary)' }}>{o.shares} shares @ ${o.price?.toFixed(2)}</span>
-                    <span style={{ fontSize: '10px', padding: '2px 7px', borderRadius: '99px', fontWeight: 500, background: '#DCFCE7', color: '#166534' }}>{o.status}</span>
-                  </div>
-                ))
-              }
+        {/* Warning banner */}
+        {disconnected.length > 0 && (
+          <div style={{ background: '#FEF9C3', border: '0.5px solid #EF9F27', borderRadius: 10, padding: '10px 16px', marginBottom: 18, display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 12, color: '#633806', gap: 12 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ width: 16, height: 16, background: '#EF9F27', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 10, fontWeight: 700, flexShrink: 0 }}>!</div>
+              <span>{disconnected.map((b) => `${b.account_name} ${lastFour(b.account_number)}`).join(', ')} — Schwab connection expired. Invest runs paused.</span>
             </div>
-          ))}
-          <button onClick={() => setModal(null)} style={{ marginTop: '8px', padding: '7px 14px', border: '0.5px solid var(--color-border-secondary)', background: 'none', borderRadius: 'var(--border-radius-md)', fontSize: '12px', cursor: 'pointer' }}>Close</button>
+            <button onClick={() => navigate('/settings')} style={{ background: '#EF9F27', color: '#412402', border: 'none', borderRadius: 6, padding: '5px 12px', fontSize: 11, cursor: 'pointer', fontWeight: 500, whiteSpace: 'nowrap', fontFamily: 'inherit' }}>
+              Reconnect now
+            </button>
+          </div>
+        )}
+
+        {/* Balance cards */}
+        {sectionTitle('Account balances')}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 12, marginBottom: 22 }}>
+          {balances.length === 0
+            ? <p style={{ fontSize: 13, color: '#9CA3AF' }}>No accounts yet. Connect Schwab in Settings.</p>
+            : balances.map((b) => <AccountCard key={b.account_id} b={b} onReconnect={() => navigate('/settings')} />)
+          }
         </div>
-      )}
+
+        {/* Rotation */}
+        {connectedAccounts.length > 0 && (
+          <>
+            {sectionTitle('Next run order')}
+            <RotationCard accounts={connectedAccounts} rotations={rotations} />
+          </>
+        )}
+
+        {/* Actions */}
+        <div style={{ display: 'flex', gap: 10, marginBottom: 24 }}>
+          <button onClick={runDry} disabled={running} style={{ flex: 1, padding: 11, background: '#fff', border: '0.5px solid rgba(0,0,0,0.15)', borderRadius: 8, fontSize: 13, cursor: 'pointer', color: '#374151', fontWeight: 500, fontFamily: 'inherit' }}>
+            {running && modal === null ? 'Running…' : 'Run dry run'}
+          </button>
+          <button onClick={() => setModal('confirm')} disabled={running} style={{ flex: 1, padding: 11, background: '#2563eb', border: 'none', borderRadius: 8, fontSize: 13, cursor: 'pointer', color: '#fff', fontWeight: 500, fontFamily: 'inherit' }}>
+            Invest now (live)
+          </button>
+          <button onClick={handleRefresh} disabled={refreshing} style={{ padding: '11px 16px', background: '#fff', border: '0.5px solid rgba(0,0,0,0.15)', borderRadius: 8, fontSize: 12, cursor: 'pointer', color: '#6B7280', fontFamily: 'inherit' }}>
+            {refreshing ? 'Refreshing…' : 'Refresh'}
+          </button>
+        </div>
+      </div>
+
+      {/* Modals */}
+      {modal === 'dry'     && <DryRunModal result={dryResult} onClose={() => setModal(null)} onInvest={() => setModal('confirm')} />}
+      {modal === 'confirm' && <ConfirmModal onCancel={() => setModal(null)} onConfirm={runLive} running={running} />}
+      {modal === 'result'  && <ResultsModal result={liveResult} onClose={() => { setModal(null); loadData(); }} />}
     </Layout>
   );
 }
