@@ -1,31 +1,48 @@
-import { Link, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
-export default function Layout({ children }) {
-  const { user, logout } = useAuth();
-  const navigate = useNavigate();
+const NAV_LINKS = [
+  { to: '/dashboard', label: 'Dashboard' },
+  { to: '/accounts', label: 'Accounts' },
+  { to: '/history', label: 'History' },
+  { to: '/settings', label: 'Settings' },
+];
 
-  const handleLogout = () => {
-    logout();
-    navigate('/login');
-  };
+export default function Layout({ children }) {
+  const { logout } = useAuth();
+  const navigate = useNavigate();
+  const { pathname } = useLocation();
+
+  const handleLogout = () => { logout(); navigate('/login'); };
 
   return (
-    <div style={{ fontFamily: 'sans-serif', minHeight: '100vh' }}>
-      <nav style={{ background: '#1a1a2e', color: '#fff', padding: '0.75rem 1.5rem', display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
-        <strong style={{ marginRight: 'auto' }}>Hye-Yield</strong>
-        <Link to="/dashboard" style={{ color: '#ccc', textDecoration: 'none' }}>Dashboard</Link>
-        <Link to="/accounts" style={{ color: '#ccc', textDecoration: 'none' }}>Accounts</Link>
-        <Link to="/history" style={{ color: '#ccc', textDecoration: 'none' }}>History</Link>
-        <Link to="/settings" style={{ color: '#ccc', textDecoration: 'none' }}>Settings</Link>
-        <span style={{ color: '#aaa', fontSize: '0.85rem' }}>{user?.username}</span>
-        <button onClick={handleLogout} style={{ background: 'none', border: '1px solid #555', color: '#ccc', cursor: 'pointer', padding: '0.25rem 0.75rem', borderRadius: '4px' }}>
-          Logout
-        </button>
+    <div style={{ minHeight: '100vh', background: 'var(--color-background-tertiary)' }}>
+      <nav style={{
+        background: '#1e3a5f', color: '#fff', padding: '0 20px',
+        height: '48px', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      }}>
+        <span style={{ color: '#7eb8f7', fontWeight: 500, fontSize: '15px' }}>Hye-Yield</span>
+        <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+          {NAV_LINKS.map(({ to, label }) => {
+            const active = pathname === to;
+            return (
+              <Link key={to} to={to} style={{
+                color: active ? '#fff' : '#94b8d4',
+                fontSize: '12px', padding: '4px 10px',
+                borderRadius: 'var(--border-radius-md)',
+                background: active ? 'rgba(255,255,255,0.1)' : 'none',
+                textDecoration: 'none',
+              }}>{label}</Link>
+            );
+          })}
+          <button onClick={handleLogout} style={{
+            background: 'none', border: 'none', color: '#f87171',
+            fontSize: '12px', padding: '4px 10px',
+            borderRadius: 'var(--border-radius-md)', cursor: 'pointer',
+          }}>Sign out</button>
+        </div>
       </nav>
-      <main style={{ padding: '1.5rem' }}>
-        {children}
-      </main>
+      <main style={{ padding: '20px' }}>{children}</main>
     </div>
   );
 }

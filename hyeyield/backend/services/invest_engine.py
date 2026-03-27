@@ -64,9 +64,11 @@ class InvestEngine:
             rotation_used=account.rotation_state,
         )
 
-        # 2. Check connected
-        if not account.refresh_token_enc:
-            invest_result.error = "Account not connected to Schwab"
+        # 2. Load user credentials and check connected
+        user_result = await self._db.execute(select(User).where(User.id == self._user_id))
+        user = user_result.scalar_one()
+        if not user.refresh_token_enc:
+            invest_result.error = "Not connected to Schwab"
             return invest_result
 
         # 3. Load allocations
@@ -80,18 +82,16 @@ class InvestEngine:
             invest_result.error = "No allocations configured"
             return invest_result
 
-        # 4. Load user credentials and create client
-        user_result = await self._db.execute(select(User).where(User.id == self._user_id))
-        user = user_result.scalar_one()
+        # 4. Create Schwab client using user-level credentials
         client = SchwabClient(
             app_key=user.get_app_key(),
             app_secret=user.get_app_secret(),
-            refresh_token=account.get_refresh_token(),
+            refresh_token=user.get_refresh_token(),
         )
 
         try:
             access_token, new_refresh = await client.refresh_access_token()
-            account.set_refresh_token(new_refresh)
+            user.set_refresh_token(new_refresh)
             await self._db.commit()
 
             # 5. Get account hashes and balances
@@ -224,7 +224,6 @@ class InvestEngine:
             select(SchwabAccount).where(
                 SchwabAccount.user_id == self._user_id,
                 SchwabAccount.enabled == True,
-                SchwabAccount.refresh_token_enc.isnot(None),
             )
         )
         accounts = result.scalars().all()

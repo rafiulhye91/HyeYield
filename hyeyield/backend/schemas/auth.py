@@ -34,6 +34,7 @@ class UserProfile(BaseModel):
     ntfy_topic: Optional[str]
     schedule_cron: str
     has_schwab_credentials: bool
+    has_schwab_connected: bool
     created_at: datetime
 
     class Config:

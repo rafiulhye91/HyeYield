@@ -10,6 +10,7 @@ export default function Settings() {
   const [appKey, setAppKey] = useState('');
   const [appSecret, setAppSecret] = useState('');
   const [hasCredentials, setHasCredentials] = useState(false);
+  const [hasConnected, setHasConnected] = useState(false);
   const [cronMsg, setCronMsg] = useState('');
   const [ntfyMsg, setNtfyMsg] = useState('');
   const [schwabMsg, setSchwabMsg] = useState('');
@@ -21,9 +22,21 @@ export default function Settings() {
       api.get('/auth/me').then((r) => {
         setNtfyTopic(r.data.ntfy_topic || '');
         setHasCredentials(r.data.has_schwab_credentials);
+        setHasConnected(r.data.has_schwab_connected);
       }),
     ]).finally(() => setLoading(false));
   }, []);
+
+  const connectSchwab = async () => {
+    const tab = window.open('', '_blank');
+    try {
+      const res = await api.get('/schwab/auth-url');
+      tab.location.href = res.data.auth_url;
+    } catch (err) {
+      tab.close();
+      setSchwabMsg(err.response?.data?.detail || 'Could not get auth URL.');
+    }
+  };
 
   const saveCron = async (e) => {
     e.preventDefault();
@@ -57,13 +70,17 @@ export default function Settings() {
       setSchwabMsg('Enter a new value to update.');
       return;
     }
+    const tab = window.open('', '_blank');
     try {
       await api.put('/auth/me', payload);
       setAppKey('');
       setAppSecret('');
       setHasCredentials(true);
-      setSchwabMsg('Schwab credentials updated.');
+      setSchwabMsg('Credentials saved. Opening Schwab authorization…');
+      const authRes = await api.get('/schwab/auth-url');
+      tab.location.href = authRes.data.auth_url;
     } catch (err) {
+      tab.close();
       setSchwabMsg(err.response?.data?.detail || 'Failed');
     }
   };
@@ -121,8 +138,25 @@ export default function Settings() {
           <small style={{ color: '#888', display: 'block', marginBottom: '0.75rem' }}>
             {hasCredentials ? 'Credentials are set. Type new values to replace them.' : 'No credentials saved yet.'}
           </small>
-          {schwabMsg && <p style={{ color: schwabMsg.includes('Failed') ? 'red' : 'green' }}>{schwabMsg}</p>}
-          <button type="submit" style={{ padding: '0.5rem 1rem', background: '#1a1a2e', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>Update Credentials</button>
+          {hasCredentials && (
+            <p style={{ fontSize: '0.85rem', marginBottom: '0.75rem' }}>
+              Status:{' '}
+              <strong style={{ color: hasConnected ? 'green' : '#cc7700' }}>
+                {hasConnected ? 'Connected to Schwab' : 'Not connected'}
+              </strong>
+            </p>
+          )}
+          {schwabMsg && <p style={{ color: schwabMsg.includes('Failed') || schwabMsg.includes('failed') ? 'red' : 'green' }}>{schwabMsg}</p>}
+          <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+            <button type="submit" style={{ padding: '0.5rem 1rem', background: '#1a1a2e', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
+              Update Credentials
+            </button>
+            {hasCredentials && (
+              <button type="button" onClick={connectSchwab} style={{ padding: '0.5rem 1rem', background: '#1e3a5f', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
+                {hasConnected ? 'Re-connect Schwab' : 'Connect Schwab'}
+              </button>
+            )}
+          </div>
         </form>
       </section>
     </Layout>

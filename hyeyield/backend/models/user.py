@@ -16,6 +16,7 @@ class User(Base):
     schedule_cron: Mapped[str] = mapped_column(String(50), nullable=False, default="35 9 1,15 * *")
     app_key_enc: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
     app_secret_enc: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
+    refresh_token_enc: Mapped[Optional[str]] = mapped_column(String(1024), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False)
 
     def get_app_key(self) -> str:
@@ -33,3 +34,11 @@ class User(Base):
     def set_app_secret(self, plaintext: str) -> None:
         from backend.utils.crypto import encrypt
         self.app_secret_enc = encrypt(plaintext)
+
+    def get_refresh_token(self) -> str:
+        from backend.utils.crypto import decrypt
+        return decrypt(self.refresh_token_enc)
+
+    def set_refresh_token(self, plaintext: str) -> None:
+        from backend.utils.crypto import encrypt
+        self.refresh_token_enc = encrypt(plaintext)
