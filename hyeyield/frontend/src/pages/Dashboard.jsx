@@ -331,8 +331,9 @@ export default function Dashboard() {
         {/* Next Investment Schedule */}
         {sectionTitle('Next Investment Schedule')}
         {connectedAccounts.length === 0 || Object.values(rotations).every((r) => r.length === 0) ? (
-          <div style={{ background: '#fff', border: '0.5px solid rgba(0,0,0,0.1)', borderRadius: 12, padding: '18px 16px', marginBottom: 22, fontSize: 12, color: '#9CA3AF', textAlign: 'center' }}>
-            No investment scheduled
+          <div style={{ background: '#fff', border: '0.5px solid rgba(0,0,0,0.1)', borderRadius: 12, padding: '18px 16px', marginBottom: 22, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span style={{ fontSize: 12, color: '#9CA3AF' }}>No investment scheduled</span>
+            <button onClick={() => navigate('/accounts')} style={{ width: 24, height: 24, borderRadius: '50%', background: '#2563eb', border: 'none', color: '#fff', fontSize: 16, lineHeight: 1, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>+</button>
           </div>
         ) : (
           <RotationCard accounts={connectedAccounts} rotations={rotations} />
