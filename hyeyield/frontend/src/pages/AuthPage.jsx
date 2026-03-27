@@ -239,10 +239,15 @@ export default function AuthPage({ initialTab = 'login' }) {
                 <input type="password" style={css.input} value={rPassword} onChange={(e) => { setRPassword(e.target.value); setRErrors((p) => ({ ...p, password: '' })); }} placeholder="••••••••" autoComplete="new-password" />
                 {rErrors.password && <div style={{ fontSize: 11, color: '#991B1B', marginTop: 3 }}>{rErrors.password}</div>}
               </div>
+              <div style={{ background: '#F0F6FF', border: '0.5px solid #BFDBFE', borderRadius: 8, padding: '10px 12px', marginBottom: 14, fontSize: 11, color: '#1e3a5f', lineHeight: 1.6 }}>
+                <strong>Before you continue:</strong>
+                <ol style={{ paddingLeft: 16, marginTop: 4 }}>
+                  <li>Request an App Key and Secret from the <a href="https://developer.schwab.com" target="_blank" rel="noreferrer" style={{ color: '#2563eb' }}>Schwab Developer Portal</a>.</li>
+                  <li>Log in to your <a href="https://www.schwab.com" target="_blank" rel="noreferrer" style={{ color: '#2563eb' }}>Schwab account</a> and enable <strong>third-party investment access</strong> under account settings.</li>
+                </ol>
+              </div>
               <div style={{ marginBottom: 14 }}>
-                <label style={{ fontSize: 12, color: '#4B5563', marginBottom: 4, display: 'block' }}>
-                  Schwab App Key <span style={{ color: '#9CA3AF', fontWeight: 400 }}>(<a href="https://developer.schwab.com" target="_blank" rel="noreferrer" style={{ color: '#9CA3AF' }}>developer.schwab.com</a>)</span>
-                </label>
+                <label style={{ fontSize: 12, color: '#4B5563', marginBottom: 4, display: 'block' }}>Schwab App Key</label>
                 <input style={css.input} value={rAppKey} onChange={(e) => { setRAppKey(e.target.value); setRErrors((p) => ({ ...p, app_key: '' })); }} placeholder="Your Schwab App Key" />
                 {rErrors.app_key && <div style={{ fontSize: 11, color: '#991B1B', marginTop: 3 }}>{rErrors.app_key}</div>}
               </div>
