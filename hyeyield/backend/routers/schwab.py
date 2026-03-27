@@ -365,20 +365,6 @@ async def get_balances(
     return balances
 
 
-@router.get("/schwab/debug-raw")
-async def debug_raw(
-    current_user: User = Depends(get_current_user),
-):
-    """Return raw Schwab /accounts response for inspection. Remove after use."""
-    client = SchwabClient(
-        app_key=current_user.get_app_key(),
-        app_secret=current_user.get_app_secret(),
-        refresh_token=current_user.get_refresh_token(),
-    )
-    access_token, _ = await client.refresh_access_token()
-    return await client.get_all_balances(access_token)
-
-
 # ------------------------------------------------------------------
 # Allocations
 # ------------------------------------------------------------------
