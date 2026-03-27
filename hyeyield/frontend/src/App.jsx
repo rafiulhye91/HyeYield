@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { DashboardProvider } from './context/DashboardContext';
 import AuthPage from './pages/AuthPage';
 import Dashboard from './pages/Dashboard';
 import Accounts from './pages/Accounts';
@@ -22,6 +23,7 @@ function PublicRoute({ children }) {
 export default function App() {
   return (
     <AuthProvider>
+      <DashboardProvider>
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<PublicRoute><AuthPage initialTab="login" /></PublicRoute>} />
@@ -34,6 +36,7 @@ export default function App() {
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>
       </BrowserRouter>
+      </DashboardProvider>
     </AuthProvider>
   );
 }

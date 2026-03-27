@@ -1,5 +1,6 @@
 import { useLocation, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useDashboard } from '../context/DashboardContext';
 
 const NAV_LINKS = [
   { to: '/dashboard', label: 'Dashboard' },
@@ -10,10 +11,11 @@ const NAV_LINKS = [
 
 export default function Layout({ children }) {
   const { logout } = useAuth();
+  const { reset } = useDashboard();
   const navigate = useNavigate();
   const { pathname } = useLocation();
 
-  const handleLogout = () => { logout(); navigate('/login'); };
+  const handleLogout = () => { logout(); reset(); navigate('/login'); };
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--color-background-tertiary)' }}>

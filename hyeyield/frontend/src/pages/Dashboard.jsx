@@ -1,7 +1,6 @@
-import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
-import api from '../api/client';
+import { useDashboard } from '../context/DashboardContext';
 
 // ── helpers ──────────────────────────────────────────────────────────
 const fmt    = (n) => n != null ? `$${Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—';
@@ -239,69 +238,7 @@ function ResultsModal({ result, onClose }) {
 // ── Main page ─────────────────────────────────────────────────────────
 export default function Dashboard() {
   const navigate = useNavigate();
-  const [balances, setBalances] = useState([]);
-  const [connectedAccounts, setConnectedAccounts] = useState([]);
-  const [rotations, setRotations] = useState({});
-  const [loading, setLoading] = useState(true);
-  const [balancesLoading, setBalancesLoading] = useState(true);
-
-  useEffect(() => {
-    // Phase 1: load accounts + allocations from local DB — renders immediately
-    api.get('/accounts').then(async (r) => {
-      const accounts = r.data;
-      const cards = accounts.map((a) => ({
-        account_id: a.id,
-        account_name: a.account_name,
-        account_number: a.account_number,
-        account_type: a.account_type,
-        connected: a.connected,
-        enabled: a.enabled,
-        last_run: a.last_run,
-        rotation_state: a.rotation_state,
-      }));
-      setBalances(cards);
-
-      const connected = accounts.filter((a) => a.connected && a.enabled);
-      setConnectedAccounts(connected);
-
-      const allocs = await Promise.all(
-        connected.map((a) =>
-          api.get(`/accounts/${a.id}/allocations`)
-            .then((ar) => ({ id: a.id, symbols: ar.data.map((al) => al.symbol) }))
-            .catch(() => ({ id: a.id, symbols: [] }))
-        )
-      );
-      const map = {};
-      allocs.forEach(({ id, symbols }) => { map[id] = symbols; });
-      setRotations(map);
-      setLoading(false);
-
-      // Phase 2: fetch balances from Schwab API in background
-      try {
-        const br = await api.get('/schwab/balances');
-        const balanceMap = {};
-        br.data.forEach((b) => { balanceMap[b.account_id] = b; });
-        setBalances((prev) => prev.map((c) => ({ ...c, ...(balanceMap[c.account_id] || {}) })));
-      } catch (_) {}
-      setBalancesLoading(false);
-    }).catch(() => setLoading(false));
-  }, []);
-
-  const [syncing, setSyncing] = useState(false);
-
-  const handleSync = async () => {
-    setSyncing(true);
-    try {
-      await api.post('/schwab/sync');
-      const r = await api.get('/accounts');
-      const accounts = r.data;
-      setBalances((prev) => prev.map((c) => {
-        const a = accounts.find((x) => x.id === c.account_id);
-        return a ? { ...c, account_name: a.account_name, account_type: a.account_type } : c;
-      }));
-    } catch (_) {}
-    setSyncing(false);
-  };
+  const { balances, connectedAccounts, rotations, loading, balancesLoading, syncing, sync } = useDashboard();
 
   const disconnected = balances.filter((b) => b.enabled && !b.connected);
 
@@ -342,7 +279,7 @@ export default function Dashboard() {
         {/* Balance cards */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
           {sectionTitle('Account balances')}
-          <button onClick={handleSync} disabled={syncing} style={{ padding: '4px 12px', background: '#fff', border: '0.5px solid rgba(0,0,0,0.15)', borderRadius: 6, fontSize: 11, cursor: 'pointer', color: '#6B7280', fontFamily: 'inherit', marginBottom: 10 }}>
+          <button onClick={sync} disabled={syncing} style={{ padding: '4px 12px', background: '#fff', border: '0.5px solid rgba(0,0,0,0.15)', borderRadius: 6, fontSize: 11, cursor: 'pointer', color: '#6B7280', fontFamily: 'inherit', marginBottom: 10 }}>
             {syncing ? 'Syncing…' : 'Sync accounts'}
           </button>
         </div>
