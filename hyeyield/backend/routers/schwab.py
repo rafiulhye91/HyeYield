@@ -2,6 +2,27 @@ import re
 from typing import List, Optional
 from urllib.parse import urlencode, unquote
 
+_ACCOUNT_TYPE_LABELS = {
+    "CASH": "Individual",
+    "MARGIN": "Margin",
+    "IRA": "Traditional IRA",
+    "ROTH_IRA": "Roth IRA",
+    "ROLLOVER_IRA": "Rollover IRA",
+    "SEP_IRA": "SEP IRA",
+    "SIMPLE_IRA": "SIMPLE IRA",
+    "EDUCATION_SAVINGS": "Education Savings",
+    "CUSTODIAL": "Custodial",
+}
+
+def _account_label(acct: dict) -> tuple[str, str]:
+    """Return (account_name, account_type) for a Schwab securitiesAccount dict."""
+    raw_type = acct.get("type", "")
+    acc_num = acct.get("accountNumber", "")
+    type_label = _ACCOUNT_TYPE_LABELS.get(raw_type.upper(), raw_type.replace("_", " ").title()) if raw_type else "Account"
+    nick = acct.get("nickName", "").strip()
+    name = nick if nick else f"{type_label} ...{acc_num[-4:]}"
+    return name, type_label
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -205,12 +226,12 @@ async def connect_schwab(
                 )
             )
             if existing.scalar_one_or_none() is None:
-                acc_type = acct.get("type", "").replace("_", " ").title()
+                name, type_label = _account_label(acct)
                 new_acct = SchwabAccount(
                     user_id=current_user.id,
                     account_number=acc_num,
-                    account_name=f"{acc_type} ...{acc_num[-4:]}",
-                    account_type=acct.get("type", "").lower(),
+                    account_name=name,
+                    account_type=type_label,
                 )
                 db.add(new_acct)
         await db.commit()
@@ -245,22 +266,25 @@ async def sync_accounts(
         acc_num = acct.get("accountNumber")
         if not acc_num:
             continue
-        existing = await db.execute(
+        result = await db.execute(
             select(SchwabAccount).where(
                 SchwabAccount.user_id == current_user.id,
                 SchwabAccount.account_number == acc_num,
             )
         )
-        if existing.scalar_one_or_none() is None:
-            acc_type = acct.get("type", "").replace("_", " ").title()
-            new_acct = SchwabAccount(
+        name, type_label = _account_label(acct)
+        row = result.scalar_one_or_none()
+        if row is None:
+            db.add(SchwabAccount(
                 user_id=current_user.id,
                 account_number=acc_num,
-                account_name=f"{acc_type} ...{acc_num[-4:]}",
-                account_type=acct.get("type", "").lower(),
-            )
-            db.add(new_acct)
+                account_name=name,
+                account_type=type_label,
+            ))
             synced += 1
+        else:
+            row.account_name = name
+            row.account_type = type_label
     await db.commit()
     return {"synced": synced}
 
