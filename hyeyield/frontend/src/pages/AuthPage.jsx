@@ -89,6 +89,8 @@ export default function AuthPage({ initialTab = 'login' }) {
   const [rUsername, setRUsername] = useState('');
   const [rEmail, setREmail] = useState('');
   const [rPassword, setRPassword] = useState('');
+  const [rAppKey, setRAppKey] = useState('');
+  const [rAppSecret, setRAppSecret] = useState('');
   const [rErrors, setRErrors] = useState({});
   const [rError, setRError] = useState('');
   const [rLoading, setRLoading] = useState(false);
@@ -122,14 +124,22 @@ export default function AuthPage({ initialTab = 'login' }) {
     else if (!/^[a-zA-Z0-9_]+$/.test(rUsername)) errs.username = 'Letters, numbers, and underscores only.';
     if (!rEmail || !rEmail.includes('@')) errs.email = 'Please enter a valid email address.';
     if (!rPassword || rPassword.length < 8) errs.password = 'Password must be at least 8 characters.';
+    if (!rAppKey) errs.app_key = 'App Key is required.';
+    if (!rAppSecret) errs.app_secret = 'App Secret is required.';
     if (Object.keys(errs).length) { setRErrors(errs); return; }
     setRErrors({});
+
+    // Open blank tab immediately (before async calls) to avoid popup blocking
+    const tab = window.open('', '_blank');
     setRLoading(true);
     try {
-      const res = await api.post('/auth/register', { username: rUsername, email: rEmail, password: rPassword });
+      const res = await api.post('/auth/register', { username: rUsername, email: rEmail, password: rPassword, app_key: rAppKey, app_secret: rAppSecret });
       localStorage.setItem('token', res.data.access_token);
-      navigate('/settings');
+      const authRes = await api.get('/schwab/auth-url');
+      tab.location.href = authRes.data.auth_url;
+      navigate('/accounts');
     } catch (err) {
+      tab.close();
       setRError(err.response?.data?.detail || 'Registration failed.');
     } finally {
       setRLoading(false);
@@ -229,11 +239,23 @@ export default function AuthPage({ initialTab = 'login' }) {
                 <input type="password" style={css.input} value={rPassword} onChange={(e) => { setRPassword(e.target.value); setRErrors((p) => ({ ...p, password: '' })); }} placeholder="••••••••" autoComplete="new-password" />
                 {rErrors.password && <div style={{ fontSize: 11, color: '#991B1B', marginTop: 3 }}>{rErrors.password}</div>}
               </div>
+              <div style={{ marginBottom: 14 }}>
+                <label style={{ fontSize: 12, color: '#4B5563', marginBottom: 4, display: 'block' }}>
+                  Schwab App Key <span style={{ color: '#9CA3AF', fontWeight: 400 }}>(<a href="https://developer.schwab.com" target="_blank" rel="noreferrer" style={{ color: '#9CA3AF' }}>developer.schwab.com</a>)</span>
+                </label>
+                <input style={css.input} value={rAppKey} onChange={(e) => { setRAppKey(e.target.value); setRErrors((p) => ({ ...p, app_key: '' })); }} placeholder="Your Schwab App Key" />
+                {rErrors.app_key && <div style={{ fontSize: 11, color: '#991B1B', marginTop: 3 }}>{rErrors.app_key}</div>}
+              </div>
+              <div style={{ marginBottom: 14 }}>
+                <label style={{ fontSize: 12, color: '#4B5563', marginBottom: 4, display: 'block' }}>Schwab App Secret</label>
+                <input type="password" style={css.input} value={rAppSecret} onChange={(e) => { setRAppSecret(e.target.value); setRErrors((p) => ({ ...p, app_secret: '' })); }} placeholder="Your Schwab App Secret" />
+                {rErrors.app_secret && <div style={{ fontSize: 11, color: '#991B1B', marginTop: 3 }}>{rErrors.app_secret}</div>}
+              </div>
               <button type="submit" style={css.btnPrimary} disabled={rLoading}>
                 {rLoading ? 'Creating account…' : 'Create account → connect Schwab'}
               </button>
               <div style={{ fontSize: 11, color: '#9CA3AF', marginTop: 14, textAlign: 'center', lineHeight: 1.5 }}>
-                After registering you'll connect your Schwab credentials in Settings.<br />
+                After creating your account, Schwab authorization will open automatically.<br />
                 Already have an account?{' '}
                 <span style={{ color: '#2563eb', cursor: 'pointer' }} onClick={() => switchTab('login')}>Sign in →</span>
               </div>
