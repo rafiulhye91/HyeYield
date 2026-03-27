@@ -17,10 +17,9 @@ _ACCOUNT_TYPE_LABELS = {
 def _account_label(acct: dict) -> tuple[str, str]:
     """Return (account_name, account_type) for a Schwab securitiesAccount dict."""
     raw_type = acct.get("type", "")
-    acc_num = acct.get("accountNumber", "")
     type_label = _ACCOUNT_TYPE_LABELS.get(raw_type.upper(), raw_type.replace("_", " ").title()) if raw_type else "Account"
     nick = acct.get("nickName", "").strip()
-    name = nick if nick else f"{type_label} ...{acc_num[-4:]}"
+    name = nick if nick else type_label
     return name, type_label
 
 from fastapi import APIRouter, Depends, HTTPException, status

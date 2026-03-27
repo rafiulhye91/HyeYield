@@ -47,7 +47,7 @@ function AccountCard({ b, onReconnect, balancesLoading }) {
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <div style={{ fontSize: 13, fontWeight: 500, color: '#111827' }}>{b.account_name}</div>
-            {b.account_type && (
+            {b.account_type && b.account_type !== b.account_name && (
               <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 99, background: '#F3F4F6', color: '#6B7280', fontWeight: 500 }}>{b.account_type}</span>
             )}
           </div>
