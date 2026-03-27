@@ -7,8 +7,8 @@ class RegisterRequest(BaseModel):
     username: str
     email: EmailStr
     password: str
-    app_key: str
-    app_secret: str
+    app_key: Optional[str] = None
+    app_secret: Optional[str] = None
 
 
 class LoginRequest(BaseModel):
