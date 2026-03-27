@@ -13,10 +13,12 @@ export default function Accounts() {
   useEffect(() => { load(); }, []);
 
   const startConnect = async () => {
+    const tab = window.open('', '_blank');
     try {
       const res = await api.get('/schwab/auth-url');
-      window.open(res.data.auth_url, '_blank');
+      tab.location.href = res.data.auth_url;
     } catch (err) {
+      tab.close();
       alert(err.response?.data?.detail || 'Could not get auth URL. Make sure Schwab credentials are configured in Settings.');
     }
   };

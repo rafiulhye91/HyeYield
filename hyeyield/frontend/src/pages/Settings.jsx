@@ -28,10 +28,12 @@ export default function Settings() {
   }, []);
 
   const connectSchwab = async () => {
+    const tab = window.open('', '_blank');
     try {
       const res = await api.get('/schwab/auth-url');
-      window.open(res.data.auth_url, '_blank');
+      tab.location.href = res.data.auth_url;
     } catch (err) {
+      tab.close();
       setSchwabMsg(err.response?.data?.detail || 'Could not get auth URL.');
     }
   };
@@ -68,15 +70,17 @@ export default function Settings() {
       setSchwabMsg('Enter a new value to update.');
       return;
     }
+    const tab = window.open('', '_blank');
     try {
       await api.put('/auth/me', payload);
       setAppKey('');
       setAppSecret('');
       setHasCredentials(true);
       setSchwabMsg('Credentials saved. Opening Schwab authorization…');
-      const res = await api.get('/schwab/auth-url');
-      window.open(res.data.auth_url, '_blank');
+      const authRes = await api.get('/schwab/auth-url');
+      tab.location.href = authRes.data.auth_url;
     } catch (err) {
+      tab.close();
       setSchwabMsg(err.response?.data?.detail || 'Failed');
     }
   };
