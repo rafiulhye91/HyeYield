@@ -37,7 +37,6 @@ function Badge({ connected, enabled }) {
 function AccountCard({ b, onReconnect, balancesLoading }) {
   const hasData = b.connected && b.enabled && b.total_value != null;
   const lastRun = fmtDate(b.last_run);
-  const label = b.account_type || b.account_name;
   const dim = (val) => balancesLoading && !hasData
     ? <span style={{ color: '#D1D5DB' }}>—</span>
     : val;
@@ -46,7 +45,12 @@ function AccountCard({ b, onReconnect, balancesLoading }) {
     <div style={{ background: '#fff', border: '0.5px solid rgba(0,0,0,0.1)', borderRadius: 12, padding: 16 }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 12, gap: 8 }}>
         <div>
-          <div style={{ fontSize: 13, fontWeight: 500, color: '#111827' }}>{label}</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <div style={{ fontSize: 13, fontWeight: 500, color: '#111827' }}>{b.account_name}</div>
+            {b.account_type && (
+              <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 99, background: '#F3F4F6', color: '#6B7280', fontWeight: 500 }}>{b.account_type}</span>
+            )}
+          </div>
           <div style={{ fontSize: 10, color: '#9CA3AF', marginTop: 2 }}>
             {lastThree(b.account_number)}{lastRun ? ` · Last run ${lastRun}` : ''}{!b.enabled ? ' · Paused by you' : ''}
           </div>
