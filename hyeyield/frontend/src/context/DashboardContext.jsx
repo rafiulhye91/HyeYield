@@ -1,9 +1,11 @@
 import { createContext, useContext, useState, useEffect, useRef } from 'react';
 import api from '../api/client';
+import { useAuth } from './AuthContext';
 
 const DashboardContext = createContext(null);
 
 export function DashboardProvider({ children }) {
+  const { user } = useAuth();
   const [balances, setBalances] = useState([]);
   const [connectedAccounts, setConnectedAccounts] = useState([]);
   const [rotations, setRotations] = useState({});
@@ -13,12 +15,11 @@ export function DashboardProvider({ children }) {
   const initialized = useRef(false);
 
   useEffect(() => {
+    if (!user) return;
     if (initialized.current) return;
-    const token = localStorage.getItem('token');
-    if (!token) return;
     initialized.current = true;
     loadAccounts(true);
-  }, []);
+  }, [user]);
 
   const loadAccounts = async (withBalances = false) => {
     try {
