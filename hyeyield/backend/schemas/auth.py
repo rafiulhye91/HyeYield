@@ -27,6 +27,11 @@ class UserUpdate(BaseModel):
     app_secret: Optional[str] = None
 
 
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+
 class UserProfile(BaseModel):
     id: int
     username: str

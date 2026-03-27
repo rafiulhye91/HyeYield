@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.database import get_db
 from backend.models.user import User
-from backend.schemas.auth import AuthResponse, LoginRequest, RegisterRequest, UserProfile, UserUpdate
+from backend.schemas.auth import AuthResponse, ChangePasswordRequest, LoginRequest, RegisterRequest, UserProfile, UserUpdate
 from backend.utils.auth_utils import hash_password, verify_password
 from backend.utils.jwt_utils import create_access_token, get_current_user
 
@@ -80,3 +80,34 @@ async def update_me(
     await db.commit()
     await db.refresh(current_user)
     return _user_profile(current_user)
+
+
+@router.post("/change-password", status_code=status.HTTP_204_NO_CONTENT)
+async def change_password(
+    body: ChangePasswordRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    if not verify_password(body.current_password, current_user.password_hash):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Current password is incorrect")
+    if len(body.new_password) < 8:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="New password must be at least 8 characters")
+    current_user.password_hash = hash_password(body.new_password)
+    await db.commit()
+
+
+@router.delete("/me", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_account(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    await db.delete(current_user)
+    await db.commit()
+
+
+@router.post("/ntfy-test", status_code=status.HTTP_204_NO_CONTENT)
+async def ntfy_test(current_user: User = Depends(get_current_user)):
+    if not current_user.ntfy_topic:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="No ntfy topic configured")
+    from backend.services.notify import send_notify
+    await send_notify(current_user.ntfy_topic, "Hye-Yield: Test notification", "Your push notifications are working correctly.")
