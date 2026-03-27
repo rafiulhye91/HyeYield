@@ -3,16 +3,22 @@ import api from '../api/client';
 import { useAuth } from './AuthContext';
 
 const DashboardContext = createContext(null);
+const CACHE_KEY = 'dashboard_cache';
+
+const saveCache = (data) => sessionStorage.setItem(CACHE_KEY, JSON.stringify(data));
+const loadCache = () => { try { return JSON.parse(sessionStorage.getItem(CACHE_KEY)); } catch { return null; } };
+const clearCache = () => sessionStorage.removeItem(CACHE_KEY);
 
 export function DashboardProvider({ children }) {
   const { user } = useAuth();
-  const [balances, setBalances] = useState([]);
-  const [connectedAccounts, setConnectedAccounts] = useState([]);
-  const [rotations, setRotations] = useState({});
-  const [loading, setLoading] = useState(true);
-  const [balancesLoading, setBalancesLoading] = useState(true);
+  const cache = loadCache();
+  const [balances, setBalances] = useState(cache?.balances || []);
+  const [connectedAccounts, setConnectedAccounts] = useState(cache?.connectedAccounts || []);
+  const [rotations, setRotations] = useState(cache?.rotations || {});
+  const [loading, setLoading] = useState(!cache);
+  const [balancesLoading, setBalancesLoading] = useState(false);
   const [syncing, setSyncing] = useState(false);
-  const initialized = useRef(false);
+  const initialized = useRef(!!cache);
 
   useEffect(() => {
     if (!user) return;
@@ -59,8 +65,14 @@ export function DashboardProvider({ children }) {
           const br = await api.get('/schwab/balances');
           const balanceMap = {};
           br.data.forEach((b) => { balanceMap[b.account_id] = b; });
-          setBalances((prev) => prev.map((c) => ({ ...c, ...(balanceMap[c.account_id] || {}) })));
-        } catch (_) {}
+          setBalances((prev) => {
+            const updated = prev.map((c) => ({ ...c, ...(balanceMap[c.account_id] || {}) }));
+            saveCache({ balances: updated, connectedAccounts: connected, rotations: map });
+            return updated;
+          });
+        } catch (_) {
+          saveCache({ balances: cards, connectedAccounts: connected, rotations: map });
+        }
         setBalancesLoading(false);
       }
     } catch (_) {
@@ -79,12 +91,13 @@ export function DashboardProvider({ children }) {
   };
 
   const reset = () => {
+    clearCache();
     initialized.current = false;
     setBalances([]);
     setConnectedAccounts([]);
     setRotations({});
     setLoading(true);
-    setBalancesLoading(true);
+    setBalancesLoading(false);
   };
 
   return (
