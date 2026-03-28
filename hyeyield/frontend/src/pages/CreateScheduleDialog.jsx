@@ -135,6 +135,7 @@ export default function CreateScheduleDialog({ accounts, onClose, onSaved, editS
   const [hour, setHour] = useState(editSchedule ? String(editSchedule.hour).padStart(2, '0') : '09');
   const [minute, setMinute] = useState(editSchedule ? String(editSchedule.minute).padStart(2, '0') : '35');
   const [timezone, setTimezone] = useState(editSchedule?.timezone || 'America/Chicago');
+  const [isTest, setIsTest] = useState(editSchedule ? editSchedule.is_test : true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -162,7 +163,7 @@ export default function CreateScheduleDialog({ accounts, onClose, onSaved, editS
     return `Monthly on the ${dayOfMonth}${['th','st','nd','rd'][dayOfMonth % 10 < 4 && (dayOfMonth < 11 || dayOfMonth > 13) ? dayOfMonth % 10 : 0] || 'th'} at ${t} ${tz}`;
   };
 
-  const save = async (isTest) => {
+  const save = async (isTestVal) => {
     if (!accountId) { setError('Please select an account.'); return; }
     if (total !== 100) { setError(`Allocations must total 100% (currently ${total}%).`); return; }
     const validRows = rows.filter(r => r.symbol && r.pct);
@@ -179,7 +180,7 @@ export default function CreateScheduleDialog({ accounts, onClose, onSaved, editS
     setError('');
     const payload = {
       account_id: parseInt(accountId),
-      is_test: isTest,
+      is_test: isTestVal,
       frequency: finalFreq,
       day_of_week: finalDow,
       day_of_month: finalDom,
@@ -202,8 +203,7 @@ export default function CreateScheduleDialog({ accounts, onClose, onSaved, editS
   };
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, padding: 20 }}
-      onClick={(e) => e.target === e.currentTarget && onClose()}>
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, padding: 20 }}>
       <div style={{ background: '#fff', borderRadius: 14, border: '0.5px solid rgba(0,0,0,0.1)', width: '100%', maxWidth: 500, boxShadow: '0 4px 24px rgba(0,0,0,0.08)', maxHeight: '90vh', overflowY: 'auto' }}>
 
         {/* Header */}
@@ -339,14 +339,25 @@ export default function CreateScheduleDialog({ accounts, onClose, onSaved, editS
         </div>
 
         {/* Footer */}
-        <div style={{ padding: '14px 20px', borderTop: '0.5px solid rgba(0,0,0,0.08)', display: 'flex', gap: 8, alignItems: 'center' }}>
-          <button onClick={onClose} style={{ padding: '10px 14px', background: 'none', border: 'none', fontSize: 13, cursor: 'pointer', color: '#9CA3AF', fontFamily: 'inherit' }}>Cancel</button>
-          <button onClick={() => save(true)} disabled={saving} style={{ flex: 1, padding: 10, background: '#fff', border: '1px solid #D1D5DB', borderRadius: 8, fontSize: 13, fontWeight: 500, cursor: 'pointer', color: '#374151', fontFamily: 'inherit' }}>
-            {saving ? 'Saving…' : isEdit ? 'Update as Test Run' : 'Schedule a Test Run'}
-          </button>
-          <button onClick={() => save(false)} disabled={saving || total !== 100 || !accountId} style={{ flex: 1, padding: 10, background: total === 100 && accountId ? '#2563eb' : '#D1D5DB', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 500, cursor: total === 100 && accountId ? 'pointer' : 'not-allowed', color: '#fff', fontFamily: 'inherit' }}>
-            {saving ? 'Saving…' : isEdit ? 'Update as Live' : 'Schedule an Invest'}
-          </button>
+        <div style={{ padding: '14px 20px', borderTop: '0.5px solid rgba(0,0,0,0.08)' }}>
+          {/* Test Run / Live Invest toggle */}
+          <div style={{ display: 'flex', gap: 0, marginBottom: 12, background: '#F3F4F6', borderRadius: 8, padding: 3 }}>
+            {[{ label: 'Test Run', val: true }, { label: 'Live Invest', val: false }].map(opt => (
+              <button key={String(opt.val)} onClick={() => setIsTest(opt.val)} style={{
+                flex: 1, padding: '7px 0', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 500,
+                cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s',
+                background: isTest === opt.val ? '#fff' : 'transparent',
+                color: isTest === opt.val ? (opt.val ? '#854F0B' : '#1E40AF') : '#6B7280',
+                boxShadow: isTest === opt.val ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+              }}>{opt.label}</button>
+            ))}
+          </div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <button onClick={onClose} style={{ padding: '10px 14px', background: 'none', border: 'none', fontSize: 13, cursor: 'pointer', color: '#9CA3AF', fontFamily: 'inherit' }}>Cancel</button>
+            <button onClick={() => save(isTest)} disabled={saving || total !== 100 || !accountId} style={{ flex: 1, padding: 10, border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 500, fontFamily: 'inherit', cursor: total === 100 && accountId ? 'pointer' : 'not-allowed', background: total === 100 && accountId ? '#2563eb' : '#D1D5DB', color: '#fff' }}>
+              {saving ? 'Saving…' : isEdit ? 'Update Schedule' : 'Schedule'}
+            </button>
+          </div>
         </div>
       </div>
     </div>
