@@ -1,54 +1,91 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import api from '../api/client';
 import Layout from '../components/Layout';
 import { useDashboard } from '../context/DashboardContext';
 import CreateScheduleDialog from './CreateScheduleDialog';
 
 // ── helpers ──────────────────────────────────────────────────────────
-const fmt    = (n) => n != null ? `$${Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—';
-const fmtShort = (n) => n != null ? `$${Math.round(n).toLocaleString('en-US')}` : '—';
+const fmt       = (n) => n != null ? `$${Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—';
+const fmtShort  = (n) => n != null ? `$${Math.round(n).toLocaleString('en-US')}` : '—';
 const lastThree = (num) => num ? `...${String(num).slice(-3)}` : '';
-const fmtDate  = (d) => d ? new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : null;
+const fmtDate   = (d) => d ? new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : null;
 
 const PILL_COLORS = [
   { bg: '#DBEAFE', color: '#1E40AF' },
-  { bg: '#E1F5EE', color: '#085041' },
-  { bg: '#FAEEDA', color: '#633806' },
-  { bg: '#F3E8FF', color: '#6B21A8' },
+  { bg: '#DCFCE7', color: '#166534' },
+  { bg: '#FEF9C3', color: '#854F0B' },
+  { bg: '#EDE9FE', color: '#5B21B6' },
   { bg: '#FEE2E2', color: '#991B1B' },
 ];
+const DOT_COLORS = ['#2563eb', '#16A34A', '#D97706', '#7C3AED', '#DC2626'];
 
-const orderStatusStyle = (status) => {
-  if (!status) return { background: '#F3F4F6', color: '#6B7280' };
-  const s = status.toUpperCase();
-  if (s === 'FILLED')   return { background: '#DCFCE7', color: '#166534' };
-  if (s === 'WORKING')  return { background: '#FEF9C3', color: '#854F0B' };
-  if (s === 'REJECTED' || s === 'FAILED') return { background: '#FEE2E2', color: '#991B1B' };
-  return { background: '#F3F4F6', color: '#6B7280' };
+const freqLabel = (s) => {
+  const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+  if (s.frequency === 'weekly') return `Weekly ${days[s.day_of_week] || ''}`;
+  if (s.frequency === 'biweekly_1_15') return '1st & 15th';
+  if (s.frequency === 'biweekly_alternating') return `Bi-weekly ${days[s.day_of_week] || ''}`;
+  if (s.frequency === 'monthly') {
+    const d = s.day_of_month || 1;
+    const sfx = ['th','st','nd','rd'][d % 10 < 4 && (d < 11 || d > 13) ? d % 10 : 0] || 'th';
+    return `Monthly ${d}${sfx}`;
+  }
+  return s.frequency;
 };
 
-// ── Badge ─────────────────────────────────────────────────────────────
-function Badge({ connected, enabled }) {
-  if (!enabled)    return <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 99, fontWeight: 500, background: '#F3F4F6', color: '#6B7280' }}>Disabled</span>;
-  if (!connected)  return <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 99, fontWeight: 500, background: '#FEE2E2', color: '#991B1B' }}>Token expired</span>;
-  return <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 99, fontWeight: 500, background: '#DCFCE7', color: '#166534' }}>Connected</span>;
-}
+const schedTime = (s) => {
+  const tzLabel = { 'America/Chicago': 'CT', 'America/New_York': 'ET', 'America/Denver': 'MT', 'America/Los_Angeles': 'PT' }[s.timezone] || '';
+  const h = s.hour % 12 || 12;
+  const ampm = s.hour >= 12 ? 'PM' : 'AM';
+  return `${h}:${String(s.minute).padStart(2, '0')} ${ampm} ${tzLabel}`;
+};
 
-// ── Account card ──────────────────────────────────────────────────────
+const countdownLabel = (nextRun) => {
+  if (!nextRun) return '';
+  const days = Math.ceil((new Date(nextRun) - Date.now()) / 86400000);
+  if (days <= 0) return 'today';
+  if (days === 1) return 'tomorrow';
+  return `in ${days} days`;
+};
+
+// ── Icons ─────────────────────────────────────────────────────────────
+const PlaySVG = ({ color = 'currentColor' }) => (
+  <svg width="10" height="10" viewBox="0 0 12 12"><polygon points="2,1 10,6 2,11" fill={color} /></svg>
+);
+const PauseSVG = ({ color = '#94b8d4' }) => (
+  <svg width="10" height="10" viewBox="0 0 12 12">
+    <rect x="2" y="1" width="3" height="10" rx="1" fill={color} />
+    <rect x="7" y="1" width="3" height="10" rx="1" fill={color} />
+  </svg>
+);
+const TrashSVG = ({ color = '#EF4444' }) => (
+  <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
+    <path d="M2 3h8M5 3V2h2v1M4 3v7h4V3" stroke={color} strokeWidth="1.2" strokeLinecap="round" />
+  </svg>
+);
 const EyeOpen = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" />
   </svg>
 );
 const EyeOff = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/>
+    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+    <line x1="1" y1="1" x2="23" y2="23" />
   </svg>
 );
 
+// ── Badge ─────────────────────────────────────────────────────────────
+function Badge({ connected, enabled }) {
+  if (!enabled)   return <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 99, fontWeight: 500, background: '#F3F4F6', color: '#6B7280' }}>Disabled</span>;
+  if (!connected) return <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 99, fontWeight: 500, background: '#FEE2E2', color: '#991B1B' }}>Token expired</span>;
+  return <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 99, fontWeight: 500, background: '#DCFCE7', color: '#166534' }}>Connected</span>;
+}
+
+// ── Account card ──────────────────────────────────────────────────────
 function AccountCard({ b, onReconnect, balancesLoading, hidden }) {
-  const hasData = b.connected && b.enabled && b.total_value != null;
-  const lastRun = fmtDate(b.last_run);
+  const hasData   = b.connected && b.enabled && b.total_value != null;
+  const lastRun   = fmtDate(b.last_run);
   const dim = (val) => balancesLoading && !hasData
     ? <span style={{ color: '#D1D5DB' }}>—</span>
     : val;
@@ -69,7 +106,6 @@ function AccountCard({ b, onReconnect, balancesLoading, hidden }) {
         </div>
         <Badge connected={b.connected} enabled={b.enabled} />
       </div>
-
       <div style={{ filter: hidden ? 'blur(6px)' : 'none', userSelect: hidden ? 'none' : 'auto', transition: 'filter 0.2s ease', pointerEvents: hidden ? 'none' : 'auto' }}>
         {(!b.connected || !b.enabled) && !hasData ? (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '20px 0', gap: 8 }}>
@@ -106,145 +142,111 @@ function AccountCard({ b, onReconnect, balancesLoading, hidden }) {
   );
 }
 
-// ── Rotation card ─────────────────────────────────────────────────────
-function RotationCard({ accounts, rotations }) {
-  if (!accounts.length) return null;
+// ── Hero card ──────────────────────────────────────────────────────────
+function HeroCard({ s, balance, onToggle, onDelete, toggling }) {
+  const allocs    = s.allocations || [];
+  const cash      = balance?.cash;
+  const nextDate  = s.next_run ? fmtDate(s.next_run) : '—';
+  const countdown = s.next_run ? countdownLabel(s.next_run) : '';
+
+  const haBtn = (onClick, children, danger = false, disabled = false) => (
+    <button onClick={onClick} disabled={disabled} style={{
+      padding: '6px 13px', border: '0.5px solid rgba(255,255,255,0.18)', borderRadius: 7,
+      background: 'rgba(255,255,255,0.07)', fontSize: 11, fontWeight: 500, cursor: disabled ? 'default' : 'pointer',
+      color: danger ? '#f87171' : '#fff', fontFamily: 'inherit',
+      display: 'flex', alignItems: 'center', gap: 5,
+    }}>{children}</button>
+  );
+
   return (
-    <div style={{ background: '#fff', border: '0.5px solid rgba(0,0,0,0.1)', borderRadius: 12, padding: 16, marginBottom: 22 }}>
-      {accounts.map((a, i) => {
-        const rot = rotations[a.account_id] || [];
-        return (
-          <div key={a.account_id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: `${i === 0 ? 0 : 8}px 0 ${i === accounts.length - 1 ? 0 : 8}px`, borderBottom: i < accounts.length - 1 ? '0.5px solid rgba(0,0,0,0.06)' : 'none', gap: 12 }}>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 12, fontWeight: 500, color: '#111827' }}>{a.account_type || a.account_name} {lastThree(a.account_number)}</div>
-              <div style={{ fontSize: 11, color: '#9CA3AF', marginTop: 2 }}>
-                {a.last_run ? `Last run ${fmtDate(a.last_run)}` : 'Never run'}
-              </div>
-            </div>
-            <span style={{ fontSize: 10, color: '#9CA3AF', background: '#F9FAFB', border: '0.5px solid rgba(0,0,0,0.08)', borderRadius: 99, padding: '2px 8px', flexShrink: 0 }}>
-              Run #{(a.rotation_state || 0) + 1}
+    <div style={{ background: '#1e3a5f', borderRadius: 14, overflow: 'hidden' }}>
+      <div style={{ padding: '20px 22px', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 10, fontWeight: 600, color: '#7eb8f7', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 5, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <div style={{ width: 6, height: 6, borderRadius: '50%', background: s.enabled ? '#34D399' : '#9CA3AF', flexShrink: 0 }} />
+            {s.enabled ? `Next run · ${countdown}` : 'Paused'}
+          </div>
+          <div style={{ fontSize: 16, fontWeight: 500, color: '#fff', marginBottom: 2 }}>
+            {s.account_name} {lastThree(s.account_number)}
+          </div>
+          <div style={{ fontSize: 12, color: '#94b8d4', marginBottom: 10 }}>
+            {freqLabel(s)} · {s.is_test ? 'Test run' : 'Live'}
+          </div>
+          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+            {allocs.map(a => (
+              <span key={a.symbol} style={{ fontSize: 10, padding: '3px 8px', borderRadius: 99, fontWeight: 500, background: 'rgba(255,255,255,0.12)', color: 'rgba(255,255,255,0.9)' }}>
+                {a.symbol} {a.pct}%
+              </span>
+            ))}
+          </div>
+        </div>
+        <div style={{ textAlign: 'right', flexShrink: 0 }}>
+          <div style={{ fontSize: 26, fontWeight: 600, color: s.enabled ? '#fff' : '#94b8d4', lineHeight: 1 }}>{nextDate}</div>
+          <div style={{ fontSize: 11, color: '#94b8d4', marginTop: 3 }}>{schedTime(s)}</div>
+        </div>
+      </div>
+      <div style={{ padding: '12px 22px', borderTop: '0.5px solid rgba(255,255,255,0.07)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+        <div style={{ fontSize: 12, color: '#94b8d4' }}>
+          {cash != null
+            ? <>Cash available <span style={{ color: '#fff', fontWeight: 500 }}>{fmt(cash)}</span></>
+            : 'Balance loading…'}
+        </div>
+        <div style={{ display: 'flex', gap: 6 }}>
+          {haBtn(() => onToggle(s.id), [s.enabled ? <PauseSVG key="p" /> : <PlaySVG key="pl" color="#94b8d4" />, s.enabled ? 'Pause' : 'Resume'], false, toggling)}
+          {haBtn(() => onDelete(s.id), 'Delete', true)}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Schedule timeline row ──────────────────────────────────────────────
+function ScheduleRow({ s, dotColor, onToggle, onDelete, toggling }) {
+  const [hovered, setHovered] = useState(false);
+  const allocs   = s.allocations || [];
+  const nextDate = s.next_run ? fmtDate(s.next_run) : '—';
+  const showActions = hovered || !s.enabled;
+
+  const taBtn = (onClick, children, title, colorClass, disabled = false) => (
+    <button onClick={onClick} disabled={disabled} title={title} style={{
+      width: 24, height: 24, border: `0.5px solid ${colorClass}`, borderRadius: 6,
+      background: '#fff', cursor: disabled ? 'default' : 'pointer',
+      display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, flexShrink: 0,
+    }}>{children}</button>
+  );
+
+  return (
+    <div
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{ padding: '11px 16px', borderBottom: '0.5px solid #F3F4F6', display: 'flex', alignItems: 'center', gap: 10, background: hovered ? '#FAFBFC' : '#fff', transition: 'background 0.12s' }}
+    >
+      <div style={{ width: 8, height: 8, borderRadius: '50%', flexShrink: 0, marginTop: 2, background: s.enabled ? dotColor : '#9CA3AF' }} />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 12, fontWeight: 500, color: s.enabled ? '#111827' : '#9CA3AF' }}>
+          {s.account_name} {lastThree(s.account_number)}
+          {!s.enabled && <span style={{ fontSize: 10, color: '#9CA3AF', fontWeight: 400, marginLeft: 4 }}>Paused</span>}
+          {s.is_test && <span style={{ fontSize: 10, padding: '1px 5px', borderRadius: 99, background: '#FEF9C3', color: '#854F0B', fontWeight: 500, marginLeft: 5 }}>Test</span>}
+        </div>
+        <div style={{ fontSize: 11, color: '#9CA3AF', marginTop: 1 }}>{freqLabel(s)}</div>
+        <div style={{ display: 'flex', gap: 3, marginTop: 4, flexWrap: 'wrap' }}>
+          {allocs.map((a, idx) => (
+            <span key={a.symbol} style={{ fontSize: 10, padding: '2px 7px', borderRadius: 99, fontWeight: 500, background: PILL_COLORS[idx % PILL_COLORS.length].bg, color: PILL_COLORS[idx % PILL_COLORS.length].color }}>
+              {a.symbol} {a.pct}%
             </span>
-            <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexShrink: 0 }}>
-              {rot.map((sym, idx) => (
-                <span key={sym} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                  <span style={{ fontSize: 11, padding: '3px 9px', borderRadius: 99, fontWeight: 500, background: PILL_COLORS[idx % PILL_COLORS.length].bg, color: PILL_COLORS[idx % PILL_COLORS.length].color }}>{sym}</span>
-                  {idx < rot.length - 1 && <span style={{ fontSize: 10, color: '#D1D5DB' }}>→</span>}
-                </span>
-              ))}
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-// ── Modals ────────────────────────────────────────────────────────────
-const overlayStyle = { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: 20 };
-const modalStyle   = { background: '#fff', borderRadius: 12, padding: '22px 24px', width: '100%', maxWidth: 400, border: '0.5px solid rgba(0,0,0,0.1)' };
-
-function DryRunModal({ result, onClose, onInvest }) {
-  if (!result) return null;
-  return (
-    <div style={overlayStyle} onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div style={modalStyle}>
-        <div style={{ background: '#DBEAFE', borderRadius: 8, padding: '9px 14px', textAlign: 'center', fontSize: 12, fontWeight: 500, color: '#1E40AF', marginBottom: 14, letterSpacing: '0.02em' }}>DRY RUN — No orders were placed</div>
-        <div style={{ fontSize: 14, fontWeight: 500, color: '#111827', marginBottom: 6 }}>Simulated results</div>
-        {result.map((acct, i) => (
-          <div key={i}>
-            <div style={{ fontSize: 12, color: '#6B7280', marginBottom: 10 }}>
-              {acct.account_name} {lastFour(acct.account_number)} · {fmt(acct.cash_before)} available · Run #{(acct.rotation_used || 0) + 1}
-            </div>
-            {acct.error
-              ? <div style={{ color: '#991B1B', fontSize: 12, marginBottom: 8 }}>{acct.error}</div>
-              : acct.orders.map((o, j) => (
-                <div key={j} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '7px 0', borderBottom: '0.5px solid rgba(0,0,0,0.06)', fontSize: 12, gap: 8 }}>
-                  <div>
-                    <div style={{ fontWeight: 500, color: '#111827' }}>{o.symbol}</div>
-                    <div style={{ fontSize: 10, color: '#9CA3AF' }}>{o.is_remainder ? 'remainder' : `${o.amount && o.price ? Math.round((o.amount / (o.price * (o.shares || 1))) * 100) : '?'}% allocation`}</div>
-                  </div>
-                  <div style={{ textAlign: 'right' }}>
-                    <div style={{ color: '#6B7280', fontSize: 11 }}>{o.shares} shares @ {o.price ? `$${o.price.toFixed(2)}` : '—'}</div>
-                    <div style={{ fontWeight: 500, color: '#111827' }}>{fmt(o.amount)}</div>
-                  </div>
-                  <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 99, fontWeight: 500, background: '#F3F4F6', color: '#6B7280', flexShrink: 0 }}>DRY RUN</span>
-                </div>
-              ))
-            }
-            {!acct.error && (
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, fontWeight: 500, paddingTop: 10, marginTop: 4, borderTop: '0.5px solid rgba(0,0,0,0.08)' }}>
-                <span>Total to invest</span>
-                <span>{fmt(acct.total_invested)}</span>
-              </div>
-            )}
-          </div>
-        ))}
-        <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
-          <button onClick={onClose} style={{ flex: 1, padding: 8, border: '0.5px solid rgba(0,0,0,0.15)', background: 'none', borderRadius: 8, fontSize: 12, cursor: 'pointer', color: '#374151', fontFamily: 'inherit' }}>Close</button>
-          <button onClick={onInvest} style={{ flex: 1, padding: 8, background: '#2563eb', border: 'none', borderRadius: 8, fontSize: 12, cursor: 'pointer', color: '#fff', fontWeight: 500, fontFamily: 'inherit' }}>Invest for real →</button>
+          ))}
         </div>
       </div>
-    </div>
-  );
-}
-
-function ConfirmModal({ onCancel, onConfirm, running }) {
-  return (
-    <div style={overlayStyle} onClick={(e) => e.target === e.currentTarget && onCancel()}>
-      <div style={modalStyle}>
-        <div style={{ fontSize: 14, fontWeight: 500, color: '#111827', marginBottom: 6 }}>Place real orders?</div>
-        <div style={{ background: '#FEE2E2', borderRadius: 8, padding: '9px 14px', fontSize: 12, color: '#991B1B', marginBottom: 14, lineHeight: 1.5 }}>
-          This will place <strong>real orders</strong> using real money in your Schwab account. Orders execute immediately at market price and cannot be undone.
-        </div>
-        <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
-          <button onClick={onCancel} style={{ flex: 1, padding: 8, border: '0.5px solid rgba(0,0,0,0.15)', background: 'none', borderRadius: 8, fontSize: 12, cursor: 'pointer', color: '#374151', fontFamily: 'inherit' }}>Cancel</button>
-          <button onClick={onConfirm} disabled={running} style={{ flex: 1, padding: 8, background: '#dc2626', border: 'none', borderRadius: 8, fontSize: 12, cursor: 'pointer', color: '#fff', fontWeight: 500, fontFamily: 'inherit' }}>
-            {running ? 'Placing orders…' : 'Yes, invest now'}
-          </button>
-        </div>
+      <div style={{ textAlign: 'right', flexShrink: 0, marginRight: 8 }}>
+        <div style={{ fontSize: 11, fontWeight: 500, color: s.enabled ? '#374151' : '#9CA3AF' }}>{nextDate}</div>
+        <div style={{ fontSize: 10, color: '#9CA3AF', marginTop: 1 }}>{schedTime(s)}</div>
       </div>
-    </div>
-  );
-}
-
-function ResultsModal({ result, onClose }) {
-  if (!result) return null;
-  return (
-    <div style={overlayStyle} onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div style={modalStyle}>
-        <div style={{ fontSize: 14, fontWeight: 500, color: '#111827', marginBottom: 6 }}>Orders placed</div>
-        {result.map((acct, i) => (
-          <div key={i}>
-            <div style={{ fontSize: 12, color: '#6B7280', marginBottom: 10 }}>
-              {acct.account_name} {lastFour(acct.account_number)} · Run #{(acct.rotation_used || 0) + 1}
-            </div>
-            {acct.error
-              ? <div style={{ color: '#991B1B', fontSize: 12, marginBottom: 8 }}>{acct.error}</div>
-              : acct.orders.map((o, j) => (
-                <div key={j} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '7px 0', borderBottom: '0.5px solid rgba(0,0,0,0.06)', fontSize: 12, gap: 8 }}>
-                  <div>
-                    <div style={{ fontWeight: 500, color: '#111827' }}>{o.symbol}</div>
-                    <div style={{ fontSize: 10, color: '#9CA3AF' }}>{o.shares} shares</div>
-                  </div>
-                  <div style={{ textAlign: 'right' }}>
-                    <div style={{ color: '#6B7280', fontSize: 11 }}>@ {o.price ? `$${o.price.toFixed(2)}` : '—'}</div>
-                    <div style={{ fontWeight: 500, color: '#111827' }}>{fmt(o.amount)}</div>
-                  </div>
-                  <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 99, fontWeight: 500, flexShrink: 0, ...orderStatusStyle(o.status) }}>{o.status}</span>
-                </div>
-              ))
-            }
-            {!acct.error && (
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, fontWeight: 500, paddingTop: 10, marginTop: 4, borderTop: '0.5px solid rgba(0,0,0,0.08)' }}>
-                <span>Total invested</span>
-                <span>{fmt(acct.total_invested)}</span>
-              </div>
-            )}
-          </div>
-        ))}
-        <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
-          <button onClick={onClose} style={{ flex: 1, padding: 8, border: '0.5px solid rgba(0,0,0,0.15)', background: 'none', borderRadius: 8, fontSize: 12, cursor: 'pointer', color: '#374151', fontFamily: 'inherit' }}>Done</button>
-        </div>
+      <div style={{ display: 'flex', gap: 3, opacity: showActions ? 1 : 0, transition: 'opacity 0.15s', flexShrink: 0 }}>
+        {s.enabled
+          ? taBtn(() => onToggle(s.id), <PauseSVG color="#D97706" />, 'Pause', '#D97706', toggling)
+          : taBtn(() => onToggle(s.id), <PlaySVG color="#16A34A" />, 'Resume', '#16A34A', toggling)
+        }
+        {taBtn(() => onDelete(s.id), <TrashSVG />, 'Delete', '#EF4444')}
       </div>
     </div>
   );
@@ -253,14 +255,46 @@ function ResultsModal({ result, onClose }) {
 // ── Main page ─────────────────────────────────────────────────────────
 export default function Dashboard() {
   const navigate = useNavigate();
-  const { balances, connectedAccounts, rotations, schedules, loading, balancesLoading, syncing, sync, addSchedule, removeSchedule } = useDashboard();
-  const [hidden, setHidden] = useState(true);
+  const { balances, schedules, loading, balancesLoading, syncing, sync, addSchedule, updateSchedule, removeSchedule } = useDashboard();
+  const [hidden, setHidden]       = useState(true);
   const [showDialog, setShowDialog] = useState(false);
+  const [toggling, setToggling]   = useState(false);
 
   const disconnected = balances.filter((b) => b.enabled && !b.connected);
 
-  const sectionTitle = (text) => (
-    <div style={{ fontSize: 11, fontWeight: 500, color: '#9CA3AF', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{text}</div>
+  // Sort: enabled first, then by next_run
+  const sorted = [...schedules].sort((a, b) => {
+    if (a.enabled !== b.enabled) return a.enabled ? -1 : 1;
+    if (!a.next_run) return 1;
+    if (!b.next_run) return -1;
+    return new Date(a.next_run) - new Date(b.next_run);
+  });
+
+  // Assign dot colors to each schedule
+  let activeIdx = 0;
+  const dotColorOf = {};
+  sorted.forEach(s => {
+    dotColorOf[s.id] = s.enabled ? DOT_COLORS[activeIdx++ % DOT_COLORS.length] : '#9CA3AF';
+  });
+
+  const hero    = sorted[0] || null;
+  const heroBal = hero ? balances.find(b => b.account_id === hero.account_id) : null;
+
+  const handleToggle = async (id) => {
+    setToggling(true);
+    try {
+      const res = await api.patch(`/schedules/${id}/toggle`);
+      updateSchedule(res.data);
+    } catch (_) {}
+    setToggling(false);
+  };
+
+  const handleDelete = async (id) => {
+    await removeSchedule(id);
+  };
+
+  const sectionLabel = (text) => (
+    <span style={{ fontSize: 11, fontWeight: 600, color: '#9CA3AF', letterSpacing: '0.08em', textTransform: 'uppercase' }}>{text}</span>
   );
 
   if (loading) return <Layout><p style={{ padding: 20, fontSize: 13, color: '#6B7280' }}>Loading…</p></Layout>;
@@ -269,12 +303,12 @@ export default function Dashboard() {
     <Layout>
       <div style={{ maxWidth: 900, margin: '0 auto', padding: '24px 20px', fontFamily: 'system-ui, -apple-system, sans-serif' }}>
 
-        {/* Warning banner */}
+        {/* Token expiry warning */}
         {disconnected.length > 0 && (
           <div style={{ background: '#FEF9C3', border: '0.5px solid #EF9F27', borderRadius: 10, padding: '10px 16px', marginBottom: 18, display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 12, color: '#633806', gap: 12 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <div style={{ width: 16, height: 16, background: '#EF9F27', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 10, fontWeight: 700, flexShrink: 0 }}>!</div>
-              <span>{disconnected.map((b) => `${b.account_type || b.account_name} ${lastThree(b.account_number)}`).join(', ')} — Schwab connection expired. Invest runs paused.</span>
+              <span>{disconnected.map((b) => `${b.account_type || b.account_name} ${lastThree(b.account_number)}`).join(', ')} — Schwab connection expired.</span>
             </div>
             <button onClick={() => navigate('/settings')} style={{ background: '#EF9F27', color: '#412402', border: 'none', borderRadius: 6, padding: '5px 12px', fontSize: 11, cursor: 'pointer', fontWeight: 500, whiteSpace: 'nowrap', fontFamily: 'inherit' }}>
               Reconnect now
@@ -282,79 +316,71 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* Next Investment Schedule */}
+        {/* ── Investment Schedules ── */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-          {sectionTitle('Next Investment Schedule')}
-          <button onClick={() => setShowDialog(true)} style={{ width: 22, height: 22, borderRadius: '50%', background: '#2563eb', border: 'none', color: '#fff', fontSize: 15, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginBottom: 10 }}>+</button>
+          {sectionLabel('Investment Schedules')}
+          <button onClick={() => setShowDialog(true)} style={{ width: 28, height: 28, borderRadius: '50%', background: '#2563eb', border: 'none', color: '#fff', fontSize: 20, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1 }}>+</button>
         </div>
+
         {schedules.length === 0 ? (
-          <div style={{ background: '#fff', border: '0.5px solid rgba(0,0,0,0.1)', borderRadius: 12, padding: '18px 16px', marginBottom: 22, fontSize: 12, color: '#9CA3AF', textAlign: 'center' }}>
-            No investment scheduled
+          /* Empty state */
+          <div style={{ background: '#fff', borderRadius: 14, border: '0.5px solid rgba(0,0,0,0.07)', overflow: 'hidden', marginBottom: 28 }}>
+            <div onClick={() => setShowDialog(true)} style={{ padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}
+              onMouseEnter={e => e.currentTarget.style.background = '#F8F9FF'}
+              onMouseLeave={e => e.currentTarget.style.background = ''}>
+              <div style={{ width: 24, height: 24, borderRadius: 6, border: '1.5px dashed #D1D5DB', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9CA3AF', fontSize: 14, flexShrink: 0 }}>+</div>
+              <span style={{ fontSize: 12, color: '#9CA3AF' }}>Add new schedule</span>
+            </div>
           </div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 22 }}>
-            {schedules.map((s) => {
-              const rot = rotations[s.account_id] || s.allocations?.map(a => a.symbol) || [];
-              const freqLabel = {
-                weekly: `Every ${['Mon','Tue','Wed','Thu','Fri'][s.day_of_week] || ''} at`,
-                biweekly_1_15: '1st & 15th at',
-                biweekly_alternating: `Every other ${['Mon','Tue','Wed','Thu','Fri'][s.day_of_week] || ''} at`,
-                monthly: `Monthly on the ${s.day_of_month}${['th','st','nd','rd'][(s.day_of_month||0)%10<4&&((s.day_of_month||0)<11||(s.day_of_month||0)>13)?(s.day_of_month||0)%10:0]||'th'} at`,
-              }[s.frequency] || s.frequency;
-              const tz = { 'America/Chicago': 'CST', 'America/New_York': 'EST', 'America/Denver': 'MST', 'America/Los_Angeles': 'PST' }[s.timezone] || s.timezone;
-              const time = `${String(s.hour).padStart(2,'0')}:${String(s.minute).padStart(2,'0')} ${tz}`;
-              return (
-                <div key={s.id} style={{ background: '#fff', border: '0.5px solid rgba(0,0,0,0.1)', borderRadius: 12, padding: 14 }}>
-                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, marginBottom: 10 }}>
-                    <div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <span style={{ fontSize: 13, fontWeight: 500, color: '#111827' }}>{s.account_name}</span>
-                        <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 99, fontWeight: 500, background: s.is_test ? '#FEF9C3' : '#DCFCE7', color: s.is_test ? '#854F0B' : '#166534' }}>{s.is_test ? 'Test run' : 'Live'}</span>
-                      </div>
-                      <div style={{ fontSize: 10, color: '#9CA3AF', marginTop: 2 }}>{freqLabel} {time}</div>
-                      {s.next_run && <div style={{ fontSize: 10, color: '#6B7280', marginTop: 2 }}>Next: {new Date(s.next_run).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</div>}
-                    </div>
-                    <button onClick={() => removeSchedule(s.id)} style={{ fontSize: 11, color: '#9CA3AF', background: 'none', border: 'none', cursor: 'pointer', padding: '2px 4px', fontFamily: 'inherit' }}>Remove</button>
-                  </div>
-                  <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexWrap: 'wrap' }}>
-                    {rot.map((sym, idx) => (
-                      <span key={sym} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                        <span style={{ fontSize: 11, padding: '3px 9px', borderRadius: 99, fontWeight: 500, background: PILL_COLORS[idx % PILL_COLORS.length].bg, color: PILL_COLORS[idx % PILL_COLORS.length].color }}>{sym}</span>
-                        {idx < rot.length - 1 && <span style={{ fontSize: 10, color: '#D1D5DB' }}>→</span>}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+          <>
+            {/* Hero card — next upcoming */}
+            <HeroCard s={hero} balance={heroBal} onToggle={handleToggle} onDelete={handleDelete} toggling={toggling} />
+
+            {/* Spacer */}
+            <div style={{ height: 16 }} />
+
+            {/* Timeline list — all schedules */}
+            <div style={{ background: '#fff', borderRadius: 14, border: '0.5px solid rgba(0,0,0,0.07)', overflow: 'hidden', marginBottom: 28 }}>
+              {sorted.map(s => (
+                <ScheduleRow key={s.id} s={s} dotColor={dotColorOf[s.id]} onToggle={handleToggle} onDelete={handleDelete} toggling={toggling} />
+              ))}
+              <div onClick={() => setShowDialog(true)} style={{ padding: '11px 16px', display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', borderTop: '0.5px solid #F3F4F6' }}
+                onMouseEnter={e => e.currentTarget.style.background = '#F8F9FF'}
+                onMouseLeave={e => e.currentTarget.style.background = ''}>
+                <div style={{ width: 24, height: 24, borderRadius: 6, border: '1.5px dashed #D1D5DB', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9CA3AF', fontSize: 14, flexShrink: 0 }}>+</div>
+                <span style={{ fontSize: 12, color: '#9CA3AF' }}>Add new schedule</span>
+              </div>
+            </div>
+          </>
         )}
 
-        {/* Balance cards */}
+        {/* ── Account Balances ── */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            {sectionTitle('Account balances')}
-            <button onClick={() => setHidden((h) => !h)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF', padding: '0 0 10px', display: 'flex', alignItems: 'center' }}>
+            {sectionLabel('Account Balances')}
+            <button onClick={() => setHidden(h => !h)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF', padding: 0, display: 'flex', alignItems: 'center' }}>
               {hidden ? <EyeOff /> : <EyeOpen />}
             </button>
           </div>
-          <button onClick={sync} disabled={syncing} style={{ padding: '4px 12px', background: '#fff', border: '0.5px solid rgba(0,0,0,0.15)', borderRadius: 6, fontSize: 11, cursor: 'pointer', color: '#6B7280', fontFamily: 'inherit', marginBottom: 10 }}>
+          <button onClick={sync} disabled={syncing} style={{ padding: '4px 12px', background: '#fff', border: '0.5px solid rgba(0,0,0,0.15)', borderRadius: 6, fontSize: 11, cursor: 'pointer', color: '#6B7280', fontFamily: 'inherit' }}>
             {syncing ? 'Syncing…' : 'Sync accounts'}
           </button>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 12, marginBottom: 22 }}>
           {balances.length === 0
             ? <p style={{ fontSize: 13, color: '#9CA3AF' }}>No accounts yet. Connect Schwab in Settings.</p>
-            : balances.map((b) => <AccountCard key={b.account_id} b={b} onReconnect={() => navigate('/settings')} balancesLoading={balancesLoading} hidden={hidden} />)
+            : balances.map(b => <AccountCard key={b.account_id} b={b} onReconnect={() => navigate('/settings')} balancesLoading={balancesLoading} hidden={hidden} />)
           }
         </div>
 
       </div>
+
       {showDialog && (
         <CreateScheduleDialog
           accounts={balances}
           onClose={() => setShowDialog(false)}
-          onSaved={(s) => addSchedule(s)}
+          onSaved={s => addSchedule(s)}
         />
       )}
     </Layout>

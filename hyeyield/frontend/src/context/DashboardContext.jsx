@@ -104,6 +104,8 @@ export function DashboardProvider({ children }) {
     return [...filtered, s];
   });
 
+  const updateSchedule = (updated) => setSchedules(prev => prev.map(s => s.id === updated.id ? updated : s));
+
   const removeSchedule = async (id) => {
     await api.delete(`/schedules/${id}`);
     setSchedules(prev => prev.filter(s => s.id !== id));
@@ -121,7 +123,7 @@ export function DashboardProvider({ children }) {
   };
 
   return (
-    <DashboardContext.Provider value={{ balances, connectedAccounts, rotations, schedules, loading, balancesLoading, syncing, sync, addSchedule, removeSchedule, reset }}>
+    <DashboardContext.Provider value={{ balances, connectedAccounts, rotations, schedules, loading, balancesLoading, syncing, sync, addSchedule, updateSchedule, removeSchedule, reset }}>
       {children}
     </DashboardContext.Provider>
   );

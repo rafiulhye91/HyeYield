@@ -158,6 +158,39 @@ async def create_schedule(
     return _schedule_out(schedule, account, allocs, _next_run(schedule))
 
 
+@router.patch("/schedules/{schedule_id}/toggle")
+async def toggle_schedule(
+    schedule_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    from backend.services.scheduler import register_schedule_job, remove_schedule_job
+
+    result = await db.execute(
+        select(Schedule).where(Schedule.id == schedule_id, Schedule.user_id == current_user.id)
+    )
+    schedule = result.scalar_one_or_none()
+    if not schedule:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Schedule not found")
+
+    schedule.enabled = not schedule.enabled
+    await db.commit()
+    await db.refresh(schedule)
+
+    if schedule.enabled:
+        register_schedule_job(schedule)
+    else:
+        remove_schedule_job(schedule_id)
+
+    acct_res = await db.execute(select(SchwabAccount).where(SchwabAccount.id == schedule.account_id))
+    account = acct_res.scalar_one_or_none()
+    alloc_res = await db.execute(
+        select(Allocation).where(Allocation.account_id == schedule.account_id).order_by(Allocation.display_order)
+    )
+    allocs = alloc_res.scalars().all()
+    return _schedule_out(schedule, account, allocs, _next_run(schedule))
+
+
 @router.delete("/schedules/{schedule_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_schedule(
     schedule_id: int,
