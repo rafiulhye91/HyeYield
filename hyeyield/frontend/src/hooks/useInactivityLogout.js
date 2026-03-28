@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 
-const INACTIVITY_MS = 1 * 60 * 1000;   // 1 minute (testing)
+const INACTIVITY_MS = 15 * 60 * 1000;  // 15 minutes
 
 const ACTIVITY_EVENTS = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll'];
 
