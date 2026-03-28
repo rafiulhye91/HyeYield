@@ -352,9 +352,9 @@ export default function CreateScheduleDialog({ accounts, onClose, onSaved, editS
               }}>{opt.label}</button>
             ))}
           </div>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <button onClick={onClose} style={{ padding: '10px 14px', background: 'none', border: 'none', fontSize: 13, cursor: 'pointer', color: '#9CA3AF', fontFamily: 'inherit' }}>Cancel</button>
-            <button onClick={() => save(isTest)} disabled={saving || total !== 100 || !accountId} style={{ flex: 1, padding: 10, border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 500, fontFamily: 'inherit', cursor: total === 100 && accountId ? 'pointer' : 'not-allowed', background: total === 100 && accountId ? '#2563eb' : '#D1D5DB', color: '#fff' }}>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', justifyContent: 'flex-end' }}>
+            <button onClick={onClose} style={{ padding: '8px 14px', background: 'none', border: '0.5px solid #FCA5A5', borderRadius: 8, fontSize: 12, cursor: 'pointer', color: '#DC2626', fontFamily: 'inherit', fontWeight: 500 }}>Cancel</button>
+            <button onClick={() => save(isTest)} disabled={saving || total !== 100 || !accountId} style={{ padding: '8px 20px', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 500, fontFamily: 'inherit', cursor: total === 100 && accountId ? 'pointer' : 'not-allowed', background: total === 100 && accountId ? '#2563eb' : '#D1D5DB', color: '#fff' }}>
               {saving ? 'Saving…' : isEdit ? 'Update Schedule' : 'Schedule'}
             </button>
           </div>
