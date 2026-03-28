@@ -1,52 +1,46 @@
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef } from 'react';
 
 const INACTIVITY_MS = 1 * 60 * 1000;   // 1 minute (testing)
-const WARNING_MS    = 60 * 1000;        // show warning 60s before logout
 
-const ACTIVITY_EVENTS = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll'];
+// Intentional interactions only — no mousemove to avoid false resets on tab switch
+const ACTIVITY_EVENTS = ['mousedown', 'keydown', 'touchstart', 'scroll'];
 
 /**
- * Calls onWarn() when the user has been inactive for (INACTIVITY_MS - WARNING_MS),
- * then calls onLogout() WARNING_MS later unless activity resets the timer.
- * Returns a reset() function so the warning modal's "Stay logged in" button can call it.
+ * Logs the user out after INACTIVITY_MS of no interaction.
+ * Uses timestamps so background tab throttling doesn't prevent logout.
  */
-export function useInactivityLogout({ onWarn, onLogout, enabled }) {
-  const warnTimer   = useRef(null);
-  const logoutTimer = useRef(null);
-  const warned      = useRef(false);
-
-  const clearTimers = () => {
-    clearTimeout(warnTimer.current);
-    clearTimeout(logoutTimer.current);
-  };
-
-  const reset = useCallback(() => {
-    clearTimers();
-    warned.current = false;
-
-    warnTimer.current = setTimeout(() => {
-      warned.current = true;
-      onWarn();
-      logoutTimer.current = setTimeout(onLogout, WARNING_MS);
-    }, INACTIVITY_MS - WARNING_MS);
-  }, [onWarn, onLogout]);
+export function useInactivityLogout({ onLogout, enabled }) {
+  const lastActivity = useRef(Date.now());
+  const intervalRef  = useRef(null);
 
   useEffect(() => {
     if (!enabled) return;
 
-    reset();
+    lastActivity.current = Date.now();
 
-    const handleActivity = () => {
-      // Don't reset once the warning is showing — let the modal handle it
-      if (!warned.current) reset();
+    const handleActivity = () => { lastActivity.current = Date.now(); };
+
+    const check = () => {
+      if (Date.now() - lastActivity.current >= INACTIVITY_MS) {
+        onLogout();
+      }
+    };
+
+    // Check every 10 seconds — works even when timers are throttled
+    intervalRef.current = setInterval(check, 10_000);
+
+    // Also check immediately when user returns to tab
+    const handleVisible = () => {
+      if (document.visibilityState === 'visible') check();
     };
 
     ACTIVITY_EVENTS.forEach(e => window.addEventListener(e, handleActivity, { passive: true }));
-    return () => {
-      clearTimers();
-      ACTIVITY_EVENTS.forEach(e => window.removeEventListener(e, handleActivity));
-    };
-  }, [enabled, reset]);
+    document.addEventListener('visibilitychange', handleVisible);
 
-  return { reset };
+    return () => {
+      clearInterval(intervalRef.current);
+      ACTIVITY_EVENTS.forEach(e => window.removeEventListener(e, handleActivity));
+      document.removeEventListener('visibilitychange', handleVisible);
+    };
+  }, [enabled, onLogout]);
 }
