@@ -304,18 +304,35 @@ export default function CreateScheduleDialog({ accounts, onClose, onSaved, editS
             {frequency === 'monthly' && (
               <div style={{ marginTop: 10 }}>
                 <div style={{ fontSize: 11, color: '#6B7280', marginBottom: 6 }}>Pick a day of the month</div>
-                <div style={{ display: 'flex', justifyContent: 'center' }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 30px)', gap: 3 }}>
-                    {['Su','Mo','Tu','We','Th','Fr','Sa'].map(h => (
-                      <div key={h} style={{ fontSize: 9, fontWeight: 600, color: '#9CA3AF', textAlign: 'center', padding: '2px 0' }}>{h}</div>
-                    ))}
-                    {Array.from({ length: 4 }).map((_, i) => (
-                      <div key={`pad-${i}`} />
-                    ))}
-                    {Array.from({ length: 28 }, (_, i) => i + 1).map(n => (
-                      <button key={n} onClick={() => setDayOfMonth(n)} style={{ width: 30, height: 30, border: `1px solid ${dayOfMonth === n ? '#2563eb' : '#E5E7EB'}`, borderRadius: 5, background: dayOfMonth === n ? '#2563eb' : '#fff', fontSize: 10, fontWeight: 500, cursor: 'pointer', color: dayOfMonth === n ? '#fff' : '#374151', fontFamily: 'inherit', padding: 0 }}>{n}</button>
-                    ))}
-                  </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 3 }}>
+                  {['Su','Mo','Tu','We','Th','Fr','Sa'].map(h => (
+                    <div key={h} style={{ fontSize: 10, fontWeight: 600, color: '#6B7280', textAlign: 'center', padding: '4px 0 6px' }}>{h}</div>
+                  ))}
+                  {(() => {
+                    const now = new Date();
+                    const firstDow = new Date(now.getFullYear(), now.getMonth(), 1).getDay();
+                    const cells = [];
+                    for (let i = 0; i < firstDow; i++) {
+                      cells.push(<div key={`pad-${i}`} style={{ height: 32 }} />);
+                    }
+                    for (let n = 1; n <= 28; n++) {
+                      const sel = dayOfMonth === n;
+                      cells.push(
+                        <button key={n} onClick={() => setDayOfMonth(n)} style={{
+                          width: '100%', height: 32, border: `1px solid ${sel ? '#2563eb' : '#D1D5DB'}`,
+                          borderRadius: 6, background: sel ? '#2563eb' : '#fff',
+                          fontSize: 12, fontWeight: 500, cursor: 'pointer',
+                          color: sel ? '#fff' : '#374151', fontFamily: 'inherit',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          transition: 'all 0.12s', minWidth: 0,
+                        }}
+                        onMouseEnter={e => { if (!sel) { e.currentTarget.style.borderColor='#2563eb'; e.currentTarget.style.color='#2563eb'; e.currentTarget.style.background='#EFF6FF'; }}}
+                        onMouseLeave={e => { if (!sel) { e.currentTarget.style.borderColor='#D1D5DB'; e.currentTarget.style.color='#374151'; e.currentTarget.style.background='#fff'; }}}
+                        >{n}</button>
+                      );
+                    }
+                    return cells;
+                  })()}
                 </div>
               </div>
             )}
