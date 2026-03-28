@@ -74,6 +74,11 @@ const TrashSVG = ({ color = '#EF4444' }) => (
     <path d="M2 3h8M5 3V2h2v1M4 3v7h4V3" stroke={color} strokeWidth="1.2" strokeLinecap="round" />
   </svg>
 );
+const EditSVG = ({ color = '#2563eb' }) => (
+  <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
+    <path d="M8 2l2 2-6 6H2V8l6-6z" stroke={color} strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
 const EyeOpen = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" />
@@ -154,7 +159,7 @@ function AccountCard({ b, onReconnect, balancesLoading, hidden }) {
 }
 
 // ── Hero card ──────────────────────────────────────────────────────────
-function HeroCard({ s, balance, onToggle, onDelete, toggling }) {
+function HeroCard({ s, balance, onToggle, onDelete, onEdit, toggling }) {
   const allocs    = s.allocations || [];
   const cash      = balance?.cash;
   const nextDate  = s.next_run ? fmtDate(s.next_run) : '—';
@@ -204,6 +209,7 @@ function HeroCard({ s, balance, onToggle, onDelete, toggling }) {
         </div>
         <div style={{ display: 'flex', gap: 6 }}>
           {haBtn(() => onToggle(s.id), [s.enabled ? <PauseSVG key="p" /> : <PlaySVG key="pl" color="#94b8d4" />, s.enabled ? 'Pause' : 'Resume'], false, toggling)}
+          {haBtn(() => onEdit(s), [<EditSVG key="e" color="#94b8d4" />, 'Edit'])}
           {haBtn(() => onDelete(s.id), 'Delete', true)}
         </div>
       </div>
@@ -212,7 +218,7 @@ function HeroCard({ s, balance, onToggle, onDelete, toggling }) {
 }
 
 // ── Schedule timeline row ──────────────────────────────────────────────
-function ScheduleRow({ s, dotColor, onToggle, onDelete, toggling }) {
+function ScheduleRow({ s, dotColor, onToggle, onDelete, onEdit, toggling }) {
   const [hovered, setHovered] = useState(false);
   const allocs   = s.allocations || [];
   const nextDate = s.next_run ? fmtDate(s.next_run) : '—';
@@ -257,6 +263,7 @@ function ScheduleRow({ s, dotColor, onToggle, onDelete, toggling }) {
           ? taBtn(() => onToggle(s.id), <PauseSVG color="#D97706" />, 'Pause', '#D97706', toggling)
           : taBtn(() => onToggle(s.id), <PlaySVG color="#16A34A" />, 'Resume', '#16A34A', toggling)
         }
+        {taBtn(() => onEdit(s), <EditSVG />, 'Edit', '#2563eb')}
         {taBtn(() => onDelete(s.id), <TrashSVG />, 'Delete', '#EF4444')}
       </div>
     </div>
@@ -267,9 +274,13 @@ function ScheduleRow({ s, dotColor, onToggle, onDelete, toggling }) {
 export default function Dashboard() {
   const navigate = useNavigate();
   const { balances, schedules, history, loading, balancesLoading, syncing, sync, addSchedule, updateSchedule, removeSchedule } = useDashboard();
-  const [hidden, setHidden]       = useState(true);
-  const [showDialog, setShowDialog] = useState(false);
-  const [toggling, setToggling]   = useState(false);
+  const [hidden, setHidden]           = useState(true);
+  const [showDialog, setShowDialog]   = useState(false);
+  const [editingSchedule, setEditing] = useState(null);
+  const [toggling, setToggling]       = useState(false);
+
+  const openEdit  = (s) => setEditing(s);
+  const closeEdit = () => setEditing(null);
 
   const disconnected = balances.filter((b) => b.enabled && !b.connected);
 
@@ -345,7 +356,7 @@ export default function Dashboard() {
         ) : (
           <>
             {/* Hero card — next upcoming */}
-            <HeroCard s={hero} balance={heroBal} onToggle={handleToggle} onDelete={handleDelete} toggling={toggling} />
+            <HeroCard s={hero} balance={heroBal} onToggle={handleToggle} onDelete={handleDelete} onEdit={openEdit} toggling={toggling} />
 
             {/* Spacer */}
             <div style={{ height: 16 }} />
@@ -353,7 +364,7 @@ export default function Dashboard() {
             {/* Timeline list — all schedules */}
             <div style={{ background: '#fff', borderRadius: 14, border: '0.5px solid rgba(0,0,0,0.07)', overflow: 'hidden', marginBottom: 28 }}>
               {sorted.map(s => (
-                <ScheduleRow key={s.id} s={s} dotColor={dotColorOf[s.id]} onToggle={handleToggle} onDelete={handleDelete} toggling={toggling} />
+                <ScheduleRow key={s.id} s={s} dotColor={dotColorOf[s.id]} onToggle={handleToggle} onDelete={handleDelete} onEdit={openEdit} toggling={toggling} />
               ))}
               <div onClick={() => setShowDialog(true)} style={{ padding: '11px 16px', display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', borderTop: '0.5px solid #F3F4F6' }}
                 onMouseEnter={e => e.currentTarget.style.background = '#F8F9FF'}
@@ -447,6 +458,14 @@ export default function Dashboard() {
           accounts={balances}
           onClose={() => setShowDialog(false)}
           onSaved={s => addSchedule(s)}
+        />
+      )}
+      {editingSchedule && (
+        <CreateScheduleDialog
+          accounts={balances}
+          editSchedule={editingSchedule}
+          onClose={closeEdit}
+          onSaved={s => { updateSchedule(s); closeEdit(); }}
         />
       )}
     </Layout>

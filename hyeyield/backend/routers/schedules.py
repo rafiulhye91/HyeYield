@@ -145,6 +145,60 @@ async def create_schedule(
     return _schedule_out(schedule, account, allocs, _next_run(schedule))
 
 
+@router.put("/schedules/{schedule_id}")
+async def update_schedule(
+    schedule_id: int,
+    body: ScheduleCreate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    from backend.services.scheduler import register_schedule_job, remove_schedule_job
+
+    result = await db.execute(
+        select(Schedule).where(Schedule.id == schedule_id, Schedule.user_id == current_user.id)
+    )
+    schedule = result.scalar_one_or_none()
+    if not schedule:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Schedule not found")
+
+    acct_res = await db.execute(
+        select(SchwabAccount).where(SchwabAccount.id == body.account_id, SchwabAccount.user_id == current_user.id)
+    )
+    account = acct_res.scalar_one_or_none()
+    if not account:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Account not found")
+
+    total = sum(a.pct for a in body.allocations)
+    if abs(total - 100) > 0.5:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"Allocations must total 100% (got {total:.1f}%)")
+
+    schedule.account_id = body.account_id
+    schedule.is_test = body.is_test
+    schedule.frequency = body.frequency
+    schedule.day_of_week = body.day_of_week
+    schedule.day_of_month = body.day_of_month
+    schedule.hour = body.hour
+    schedule.minute = body.minute
+    schedule.timezone = body.timezone
+
+    await db.execute(delete(Allocation).where(Allocation.account_id == body.account_id))
+    for idx, a in enumerate(body.allocations):
+        db.add(Allocation(account_id=body.account_id, symbol=a.symbol.upper(), target_pct=a.pct, display_order=idx))
+
+    await db.commit()
+    await db.refresh(schedule)
+
+    remove_schedule_job(schedule_id)
+    if schedule.enabled:
+        register_schedule_job(schedule)
+
+    alloc_res = await db.execute(
+        select(Allocation).where(Allocation.account_id == body.account_id).order_by(Allocation.display_order)
+    )
+    allocs = alloc_res.scalars().all()
+    return _schedule_out(schedule, account, allocs, _next_run(schedule))
+
+
 @router.patch("/schedules/{schedule_id}/toggle")
 async def toggle_schedule(
     schedule_id: int,

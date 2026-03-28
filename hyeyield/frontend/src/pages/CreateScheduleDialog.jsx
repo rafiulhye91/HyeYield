@@ -107,17 +107,34 @@ function AllocationRow({ row, onSymbol, onPct, onDelete, canDelete }) {
   );
 }
 
-export default function CreateScheduleDialog({ accounts, onClose, onSaved }) {
-  const [accountId, setAccountId] = useState('');
-  const [rows, setRows] = useState([{ id: 0, symbol: '', pct: '' }]);
-  const [nextId, setNextId] = useState(1);
-  const [frequency, setFrequency] = useState('weekly');
-  const [dayOfWeek, setDayOfWeek] = useState(1); // Tue
-  const [dayOfMonth, setDayOfMonth] = useState(15);
-  const [biweeklyType, setBiweeklyType] = useState('biweekly_1_15');
-  const [hour, setHour] = useState('09');
-  const [minute, setMinute] = useState('35');
-  const [timezone, setTimezone] = useState('America/Chicago');
+export default function CreateScheduleDialog({ accounts, onClose, onSaved, editSchedule }) {
+  const isEdit = !!editSchedule;
+
+  const initFreq = () => {
+    if (!editSchedule) return 'weekly';
+    if (editSchedule.frequency === 'biweekly_1_15' || editSchedule.frequency === 'biweekly_alternating') return 'biweekly';
+    return editSchedule.frequency;
+  };
+  const initBiweekly = () => {
+    if (!editSchedule) return 'biweekly_1_15';
+    if (editSchedule.frequency === 'biweekly_1_15' || editSchedule.frequency === 'biweekly_alternating') return editSchedule.frequency;
+    return 'biweekly_1_15';
+  };
+
+  const [accountId, setAccountId] = useState(editSchedule ? String(editSchedule.account_id) : '');
+  const [rows, setRows] = useState(
+    editSchedule?.allocations?.length
+      ? editSchedule.allocations.map((a, i) => ({ id: i, symbol: a.symbol, pct: String(a.pct) }))
+      : [{ id: 0, symbol: '', pct: '' }]
+  );
+  const [nextId, setNextId] = useState(editSchedule?.allocations?.length || 1);
+  const [frequency, setFrequency] = useState(initFreq());
+  const [dayOfWeek, setDayOfWeek] = useState(editSchedule?.day_of_week ?? 1);
+  const [dayOfMonth, setDayOfMonth] = useState(editSchedule?.day_of_month ?? 15);
+  const [biweeklyType, setBiweeklyType] = useState(initBiweekly());
+  const [hour, setHour] = useState(editSchedule ? String(editSchedule.hour).padStart(2, '0') : '09');
+  const [minute, setMinute] = useState(editSchedule ? String(editSchedule.minute).padStart(2, '0') : '35');
+  const [timezone, setTimezone] = useState(editSchedule?.timezone || 'America/Chicago');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -160,18 +177,21 @@ export default function CreateScheduleDialog({ accounts, onClose, onSaved }) {
 
     setSaving(true);
     setError('');
+    const payload = {
+      account_id: parseInt(accountId),
+      is_test: isTest,
+      frequency: finalFreq,
+      day_of_week: finalDow,
+      day_of_month: finalDom,
+      hour: parseInt(hour),
+      minute: parseInt(minute),
+      timezone,
+      allocations: validRows.map(r => ({ symbol: r.symbol, pct: parseFloat(r.pct) })),
+    };
     try {
-      const res = await api.post('/schedules', {
-        account_id: parseInt(accountId),
-        is_test: isTest,
-        frequency: finalFreq,
-        day_of_week: finalDow,
-        day_of_month: finalDom,
-        hour: parseInt(hour),
-        minute: parseInt(minute),
-        timezone,
-        allocations: validRows.map(r => ({ symbol: r.symbol, pct: parseFloat(r.pct) })),
-      });
+      const res = isEdit
+        ? await api.put(`/schedules/${editSchedule.id}`, payload)
+        : await api.post('/schedules', payload);
       onSaved(res.data);
       onClose();
     } catch (err) {
@@ -188,7 +208,7 @@ export default function CreateScheduleDialog({ accounts, onClose, onSaved }) {
 
         {/* Header */}
         <div style={{ padding: '18px 20px 14px', borderBottom: '0.5px solid rgba(0,0,0,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ fontSize: 15, fontWeight: 500, color: '#111827' }}>Create investment schedule</div>
+          <div style={{ fontSize: 15, fontWeight: 500, color: '#111827' }}>{isEdit ? 'Edit schedule' : 'Create investment schedule'}</div>
           <button onClick={onClose} style={{ width: 26, height: 26, borderRadius: '50%', border: 'none', background: '#F3F4F6', cursor: 'pointer', fontSize: 13, color: '#6B7280', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
         </div>
 
@@ -322,10 +342,10 @@ export default function CreateScheduleDialog({ accounts, onClose, onSaved }) {
         <div style={{ padding: '14px 20px', borderTop: '0.5px solid rgba(0,0,0,0.08)', display: 'flex', gap: 8, alignItems: 'center' }}>
           <button onClick={onClose} style={{ padding: '10px 14px', background: 'none', border: 'none', fontSize: 13, cursor: 'pointer', color: '#9CA3AF', fontFamily: 'inherit' }}>Cancel</button>
           <button onClick={() => save(true)} disabled={saving} style={{ flex: 1, padding: 10, background: '#fff', border: '1px solid #D1D5DB', borderRadius: 8, fontSize: 13, fontWeight: 500, cursor: 'pointer', color: '#374151', fontFamily: 'inherit' }}>
-            {saving ? 'Saving…' : 'Schedule a Test Run'}
+            {saving ? 'Saving…' : isEdit ? 'Update as Test Run' : 'Schedule a Test Run'}
           </button>
           <button onClick={() => save(false)} disabled={saving || total !== 100 || !accountId} style={{ flex: 1, padding: 10, background: total === 100 && accountId ? '#2563eb' : '#D1D5DB', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 500, cursor: total === 100 && accountId ? 'pointer' : 'not-allowed', color: '#fff', fontFamily: 'inherit' }}>
-            {saving ? 'Saving…' : 'Schedule an Invest'}
+            {saving ? 'Saving…' : isEdit ? 'Update as Live' : 'Schedule an Invest'}
           </button>
         </div>
       </div>
