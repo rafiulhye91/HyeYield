@@ -1,5 +1,6 @@
 import { useLocation, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useDashboard } from '../context/DashboardContext';
 
 const NAV_LINKS = [
   { to: '/dashboard', label: 'Dashboard' },
@@ -10,10 +11,11 @@ const NAV_LINKS = [
 
 export default function Layout({ children }) {
   const { logout } = useAuth();
+  const { reset } = useDashboard();
   const navigate = useNavigate();
   const { pathname } = useLocation();
 
-  const handleLogout = () => { logout(); navigate('/login'); };
+  const handleLogout = () => { logout(); reset(); navigate('/login'); };
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--color-background-tertiary)' }}>
@@ -21,7 +23,7 @@ export default function Layout({ children }) {
         background: '#1e3a5f', color: '#fff', padding: '0 20px',
         height: '48px', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
       }}>
-        <span style={{ color: '#7eb8f7', fontWeight: 500, fontSize: '15px' }}>Hye-Yield</span>
+        <span style={{ color: '#7eb8f7', fontWeight: 500, fontSize: '15px' }}>HyeYield</span>
         <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
           {NAV_LINKS.map(({ to, label }) => {
             const active = pathname === to;
