@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
 import { useDashboard } from '../context/DashboardContext';
+import CreateScheduleDialog from './CreateScheduleDialog';
 
 // ── helpers ──────────────────────────────────────────────────────────
 const fmt    = (n) => n != null ? `$${Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—';
@@ -252,8 +253,9 @@ function ResultsModal({ result, onClose }) {
 // ── Main page ─────────────────────────────────────────────────────────
 export default function Dashboard() {
   const navigate = useNavigate();
-  const { balances, connectedAccounts, rotations, loading, balancesLoading, syncing, sync } = useDashboard();
+  const { balances, connectedAccounts, rotations, schedules, loading, balancesLoading, syncing, sync, addSchedule, removeSchedule } = useDashboard();
   const [hidden, setHidden] = useState(true);
+  const [showDialog, setShowDialog] = useState(false);
 
   const disconnected = balances.filter((b) => b.enabled && !b.connected);
 
@@ -281,14 +283,51 @@ export default function Dashboard() {
         )}
 
         {/* Next Investment Schedule */}
-        {sectionTitle('Next Investment Schedule')}
-        {connectedAccounts.length === 0 || Object.values(rotations).every((r) => r.length === 0) ? (
-          <div style={{ background: '#fff', border: '0.5px solid rgba(0,0,0,0.1)', borderRadius: 12, padding: '18px 16px', marginBottom: 22, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span style={{ fontSize: 12, color: '#9CA3AF' }}>No investment scheduled</span>
-            <button onClick={() => navigate('/accounts')} style={{ width: 24, height: 24, borderRadius: '50%', background: '#2563eb', border: 'none', color: '#fff', fontSize: 16, lineHeight: 1, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>+</button>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+          {sectionTitle('Next Investment Schedule')}
+          <button onClick={() => setShowDialog(true)} style={{ width: 22, height: 22, borderRadius: '50%', background: '#2563eb', border: 'none', color: '#fff', fontSize: 15, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginBottom: 10 }}>+</button>
+        </div>
+        {schedules.length === 0 ? (
+          <div style={{ background: '#fff', border: '0.5px solid rgba(0,0,0,0.1)', borderRadius: 12, padding: '18px 16px', marginBottom: 22, fontSize: 12, color: '#9CA3AF', textAlign: 'center' }}>
+            No investment scheduled
           </div>
         ) : (
-          <RotationCard accounts={connectedAccounts} rotations={rotations} />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 22 }}>
+            {schedules.map((s) => {
+              const rot = rotations[s.account_id] || s.allocations?.map(a => a.symbol) || [];
+              const freqLabel = {
+                weekly: `Every ${['Mon','Tue','Wed','Thu','Fri'][s.day_of_week] || ''} at`,
+                biweekly_1_15: '1st & 15th at',
+                biweekly_alternating: `Every other ${['Mon','Tue','Wed','Thu','Fri'][s.day_of_week] || ''} at`,
+                monthly: `Monthly on the ${s.day_of_month}${['th','st','nd','rd'][(s.day_of_month||0)%10<4&&((s.day_of_month||0)<11||(s.day_of_month||0)>13)?(s.day_of_month||0)%10:0]||'th'} at`,
+              }[s.frequency] || s.frequency;
+              const tz = { 'America/Chicago': 'CST', 'America/New_York': 'EST', 'America/Denver': 'MST', 'America/Los_Angeles': 'PST' }[s.timezone] || s.timezone;
+              const time = `${String(s.hour).padStart(2,'0')}:${String(s.minute).padStart(2,'0')} ${tz}`;
+              return (
+                <div key={s.id} style={{ background: '#fff', border: '0.5px solid rgba(0,0,0,0.1)', borderRadius: 12, padding: 14 }}>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, marginBottom: 10 }}>
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ fontSize: 13, fontWeight: 500, color: '#111827' }}>{s.account_name}</span>
+                        <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 99, fontWeight: 500, background: s.is_test ? '#FEF9C3' : '#DCFCE7', color: s.is_test ? '#854F0B' : '#166534' }}>{s.is_test ? 'Test run' : 'Live'}</span>
+                      </div>
+                      <div style={{ fontSize: 10, color: '#9CA3AF', marginTop: 2 }}>{freqLabel} {time}</div>
+                      {s.next_run && <div style={{ fontSize: 10, color: '#6B7280', marginTop: 2 }}>Next: {new Date(s.next_run).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</div>}
+                    </div>
+                    <button onClick={() => removeSchedule(s.id)} style={{ fontSize: 11, color: '#9CA3AF', background: 'none', border: 'none', cursor: 'pointer', padding: '2px 4px', fontFamily: 'inherit' }}>Remove</button>
+                  </div>
+                  <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexWrap: 'wrap' }}>
+                    {rot.map((sym, idx) => (
+                      <span key={sym} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <span style={{ fontSize: 11, padding: '3px 9px', borderRadius: 99, fontWeight: 500, background: PILL_COLORS[idx % PILL_COLORS.length].bg, color: PILL_COLORS[idx % PILL_COLORS.length].color }}>{sym}</span>
+                        {idx < rot.length - 1 && <span style={{ fontSize: 10, color: '#D1D5DB' }}>→</span>}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         )}
 
         {/* Balance cards */}
@@ -311,6 +350,13 @@ export default function Dashboard() {
         </div>
 
       </div>
+      {showDialog && (
+        <CreateScheduleDialog
+          accounts={balances}
+          onClose={() => setShowDialog(false)}
+          onSaved={(s) => addSchedule(s)}
+        />
+      )}
     </Layout>
   );
 }

@@ -1,6 +1,8 @@
 import logging
 
+import pytz
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.cron import CronTrigger
 
 from backend.database import AsyncSessionLocal
 
@@ -145,13 +147,87 @@ def remove_token_refresh_job(user_id: int) -> None:
 
 
 # ------------------------------------------------------------------
+# Per-schedule jobs
+# ------------------------------------------------------------------
+
+async def scheduled_invest_schedule(schedule_id: int) -> None:
+    """Run invest (or dry-run) for a specific schedule."""
+    from sqlalchemy import select
+    from backend.models.schedule import Schedule
+    from backend.models.user import User
+    from backend.services.invest_engine import InvestEngine
+    from backend.services.notify import send_notify
+
+    logger.info("Schedule job firing for schedule_id=%d", schedule_id)
+    async with AsyncSessionLocal() as db:
+        sched_res = await db.execute(select(Schedule).where(Schedule.id == schedule_id))
+        schedule = sched_res.scalar_one_or_none()
+        if not schedule or not schedule.enabled:
+            logger.warning("schedule_id=%d not found or disabled, skipping", schedule_id)
+            return
+
+        user_res = await db.execute(select(User).where(User.id == schedule.user_id))
+        user = user_res.scalar_one_or_none()
+        if not user:
+            return
+
+        engine = InvestEngine(db=db, user_id=schedule.user_id)
+        result = await engine.run_account(schedule.account_id, dry_run=schedule.is_test)
+
+        if user.ntfy_topic:
+            label = "Test Run" if schedule.is_test else "Investment"
+            if result.error:
+                msg = f"{result.account_name}: ERROR — {result.error}"
+            else:
+                msg = f"{result.account_name}: ${result.total_invested:.2f} {'simulated' if schedule.is_test else 'invested'}"
+            await send_notify(user.ntfy_topic, f"HyeYield: Scheduled {label}", msg)
+
+
+def _build_cron_trigger(schedule) -> CronTrigger:
+    tz = pytz.timezone(schedule.timezone)
+    f = schedule.frequency
+    h, m = schedule.hour, schedule.minute
+    if f == "weekly":
+        return CronTrigger(day_of_week=schedule.day_of_week, hour=h, minute=m, timezone=tz)
+    if f == "biweekly_1_15":
+        return CronTrigger(day="1,15", hour=h, minute=m, timezone=tz)
+    if f == "biweekly_alternating":
+        return CronTrigger(day_of_week=schedule.day_of_week, week="*/2", hour=h, minute=m, timezone=tz)
+    if f == "monthly":
+        return CronTrigger(day=schedule.day_of_month, hour=h, minute=m, timezone=tz)
+    raise ValueError(f"Unknown frequency: {f}")
+
+
+def register_schedule_job(schedule) -> None:
+    job_id = f"schedule_{schedule.id}"
+    trigger = _build_cron_trigger(schedule)
+    scheduler.add_job(
+        scheduled_invest_schedule,
+        trigger=trigger,
+        id=job_id,
+        kwargs={"schedule_id": schedule.id},
+        replace_existing=True,
+        misfire_grace_time=3600,
+    )
+    logger.info("Registered schedule job '%s'", job_id)
+
+
+def remove_schedule_job(schedule_id: int) -> None:
+    job_id = f"schedule_{schedule_id}"
+    if scheduler.get_job(job_id):
+        scheduler.remove_job(job_id)
+        logger.info("Removed schedule job '%s'", job_id)
+
+
+# ------------------------------------------------------------------
 # Startup loader
 # ------------------------------------------------------------------
 
 async def load_all_jobs() -> None:
-    """Register invest jobs for all users on startup."""
+    """Register invest jobs for all users and all schedules on startup."""
     from sqlalchemy import select
     from backend.models.user import User
+    from backend.models.schedule import Schedule
 
     async with AsyncSessionLocal() as db:
         result = await db.execute(select(User))
@@ -161,6 +237,14 @@ async def load_all_jobs() -> None:
                 register_invest_job(user.id, user.schedule_cron)
                 register_token_refresh_job(user.id)
             except Exception as e:
-                logger.error("Failed to register job for user_id=%d: %s", user.id, e)
+                logger.error("Failed to register legacy job for user_id=%d: %s", user.id, e)
+
+        sched_result = await db.execute(select(Schedule).where(Schedule.enabled == True))
+        schedules = sched_result.scalars().all()
+        for s in schedules:
+            try:
+                register_schedule_job(s)
+            except Exception as e:
+                logger.error("Failed to register schedule_id=%d: %s", s.id, e)
 
     logger.info("Scheduler startup complete — %d job(s) registered", len(scheduler.get_jobs()))

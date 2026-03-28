@@ -9,6 +9,10 @@ const saveCache = (data) => sessionStorage.setItem(CACHE_KEY, JSON.stringify(dat
 const loadCache = () => { try { return JSON.parse(sessionStorage.getItem(CACHE_KEY)); } catch { return null; } };
 const clearCache = () => sessionStorage.removeItem(CACHE_KEY);
 
+export async function fetchSchedules() {
+  try { const r = await api.get('/schedules'); return r.data; } catch { return []; }
+}
+
 export function DashboardProvider({ children }) {
   const { user } = useAuth();
   const cache = loadCache();
@@ -17,6 +21,7 @@ export function DashboardProvider({ children }) {
   const [rotations, setRotations] = useState(cache?.rotations || {});
   const [loading, setLoading] = useState(!cache);
   const [balancesLoading, setBalancesLoading] = useState(false);
+  const [schedules, setSchedules] = useState(cache?.schedules || []);
   const [syncing, setSyncing] = useState(false);
   const initialized = useRef(!!cache);
 
@@ -59,6 +64,10 @@ export function DashboardProvider({ children }) {
       setRotations(map);
       setLoading(false);
 
+      // Load schedules in parallel
+      const schedRes = await fetchSchedules();
+      setSchedules(schedRes);
+
       if (withBalances) {
         setBalancesLoading(true);
         try {
@@ -67,11 +76,11 @@ export function DashboardProvider({ children }) {
           br.data.forEach((b) => { balanceMap[b.account_id] = b; });
           setBalances((prev) => {
             const updated = prev.map((c) => ({ ...c, ...(balanceMap[c.account_id] || {}) }));
-            saveCache({ balances: updated, connectedAccounts: connected, rotations: map });
+            saveCache({ balances: updated, connectedAccounts: connected, rotations: map, schedules: schedRes });
             return updated;
           });
         } catch (_) {
-          saveCache({ balances: cards, connectedAccounts: connected, rotations: map });
+          saveCache({ balances: cards, connectedAccounts: connected, rotations: map, schedules: schedRes });
         }
         setBalancesLoading(false);
       }
@@ -90,18 +99,29 @@ export function DashboardProvider({ children }) {
     setSyncing(false);
   };
 
+  const addSchedule = (s) => setSchedules(prev => {
+    const filtered = prev.filter(x => x.account_id !== s.account_id);
+    return [...filtered, s];
+  });
+
+  const removeSchedule = async (id) => {
+    await api.delete(`/schedules/${id}`);
+    setSchedules(prev => prev.filter(s => s.id !== id));
+  };
+
   const reset = () => {
     clearCache();
     initialized.current = false;
     setBalances([]);
     setConnectedAccounts([]);
     setRotations({});
+    setSchedules([]);
     setLoading(true);
     setBalancesLoading(false);
   };
 
   return (
-    <DashboardContext.Provider value={{ balances, connectedAccounts, rotations, loading, balancesLoading, syncing, sync, reset }}>
+    <DashboardContext.Provider value={{ balances, connectedAccounts, rotations, schedules, loading, balancesLoading, syncing, sync, addSchedule, removeSchedule, reset }}>
       {children}
     </DashboardContext.Provider>
   );
