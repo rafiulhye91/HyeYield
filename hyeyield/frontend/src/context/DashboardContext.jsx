@@ -28,7 +28,11 @@ export function DashboardProvider({ children }) {
 
   useEffect(() => {
     if (!user) return;
-    if (initialized.current) return;
+    if (initialized.current) {
+      // Cache hit — accounts/balances already in state, but always refresh schedules+history
+      refreshSchedules();
+      return;
+    }
     initialized.current = true;
     loadAccounts(true);
   }, [user]);
@@ -122,10 +126,7 @@ export function DashboardProvider({ children }) {
     setSyncing(false);
   };
 
-  const addSchedule = (s) => setSchedules(prev => {
-    const filtered = prev.filter(x => x.account_id !== s.account_id);
-    return [...filtered, s];
-  });
+  const addSchedule = (s) => setSchedules(prev => [...prev, s]);
 
   const updateSchedule = (updated) => setSchedules(prev => prev.map(s => s.id === updated.id ? updated : s));
 
