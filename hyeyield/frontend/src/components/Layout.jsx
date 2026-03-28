@@ -22,6 +22,7 @@ export default function Layout({ children }) {
       <nav style={{
         background: '#1e3a5f', color: '#fff', padding: '0 20px',
         height: '48px', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        position: 'sticky', top: 0, zIndex: 100,
       }}>
         <span style={{ color: '#7eb8f7', fontWeight: 500, fontSize: '15px' }}>HyeYield</span>
         <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
