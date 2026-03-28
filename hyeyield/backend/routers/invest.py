@@ -165,7 +165,7 @@ async def get_logs(
             "status": log.status,
             "message": log.message,
             "dry_run": log.dry_run,
-            "created_at": log.created_at.isoformat(),
+            "created_at": log.created_at.isoformat() + "Z",
         }
         for log in logs
     ]
