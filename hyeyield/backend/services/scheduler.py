@@ -182,6 +182,10 @@ async def scheduled_invest_schedule(schedule_id: int) -> None:
                 msg = f"{result.account_name}: ${result.total_invested:.2f} {'simulated' if schedule.is_test else 'invested'}"
             await send_notify(user.ntfy_topic, f"HyeYield: Scheduled {label}", msg)
 
+        # Push real-time event to any connected browser tabs
+        from backend.services.sse import notify_user
+        await notify_user(schedule.user_id, {"type": "schedule_ran", "schedule_id": schedule_id})
+
 
 def _build_cron_trigger(schedule) -> CronTrigger:
     tz = pytz.timezone(schedule.timezone)

@@ -5,6 +5,7 @@ from backend.routers.auth import router as auth_router
 from backend.routers.schwab import router as schwab_router
 from backend.routers.invest import router as invest_router
 from backend.routers.schedules import router as schedules_router
+from backend.routers.events import router as events_router
 from backend.services.scheduler import scheduler, load_all_jobs
 
 app = FastAPI(title="Hye-Yield", version="1.0")
@@ -24,6 +25,7 @@ app.include_router(auth_router)
 app.include_router(schwab_router)
 app.include_router(invest_router)
 app.include_router(schedules_router)
+app.include_router(events_router)
 
 
 @app.on_event("startup")

@@ -57,6 +57,43 @@ export function DashboardProvider({ children }) {
     return () => { clearInterval(id); document.removeEventListener('visibilitychange', onVisible); };
   }, [user, refreshSchedules]);
 
+  // SSE: receive instant push when a scheduled job fires on the backend
+  useEffect(() => {
+    if (!user) return;
+    const token = localStorage.getItem('token');
+    if (!token) return;
+
+    const base = import.meta.env.VITE_API_URL || '';
+    let es = null;
+    let reconnectTimer = null;
+
+    const connect = () => {
+      es = new EventSource(`${base}/events?token=${encodeURIComponent(token)}`);
+
+      es.onmessage = (e) => {
+        try {
+          const data = JSON.parse(e.data);
+          if (data.type === 'schedule_ran') {
+            refreshSchedules();
+          }
+        } catch (_) {}
+      };
+
+      es.onerror = () => {
+        es.close();
+        // Reconnect after 5 seconds
+        reconnectTimer = setTimeout(connect, 5000);
+      };
+    };
+
+    connect();
+
+    return () => {
+      if (es) es.close();
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+    };
+  }, [user, refreshSchedules]);
+
   const loadAccounts = async (withBalances = false) => {
     try {
       const r = await api.get('/accounts');
