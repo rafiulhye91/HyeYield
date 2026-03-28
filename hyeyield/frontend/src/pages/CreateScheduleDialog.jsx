@@ -304,16 +304,18 @@ export default function CreateScheduleDialog({ accounts, onClose, onSaved, editS
             {frequency === 'monthly' && (
               <div style={{ marginTop: 10 }}>
                 <div style={{ fontSize: 11, color: '#6B7280', marginBottom: 6 }}>Pick a day of the month</div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 3 }}>
-                  {['Su','Mo','Tu','We','Th','Fr','Sa'].map(h => (
-                    <div key={h} style={{ fontSize: 9, fontWeight: 600, color: '#9CA3AF', textAlign: 'center', padding: '2px 0' }}>{h}</div>
-                  ))}
-                  {Array.from({ length: 4 }).map((_, i) => (
-                    <div key={`pad-${i}`} />
-                  ))}
-                  {Array.from({ length: 28 }, (_, i) => i + 1).map(n => (
-                    <button key={n} onClick={() => setDayOfMonth(n)} style={{ width: '100%', aspectRatio: '1', border: `1px solid ${dayOfMonth === n ? '#2563eb' : '#E5E7EB'}`, borderRadius: 5, background: dayOfMonth === n ? '#2563eb' : '#fff', fontSize: 10, fontWeight: 500, cursor: 'pointer', color: dayOfMonth === n ? '#fff' : '#374151', fontFamily: 'inherit', padding: 0 }}>{n}</button>
-                  ))}
+                <div style={{ display: 'flex', justifyContent: 'center' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 30px)', gap: 3 }}>
+                    {['Su','Mo','Tu','We','Th','Fr','Sa'].map(h => (
+                      <div key={h} style={{ fontSize: 9, fontWeight: 600, color: '#9CA3AF', textAlign: 'center', padding: '2px 0' }}>{h}</div>
+                    ))}
+                    {Array.from({ length: 4 }).map((_, i) => (
+                      <div key={`pad-${i}`} />
+                    ))}
+                    {Array.from({ length: 28 }, (_, i) => i + 1).map(n => (
+                      <button key={n} onClick={() => setDayOfMonth(n)} style={{ width: 30, height: 30, border: `1px solid ${dayOfMonth === n ? '#2563eb' : '#E5E7EB'}`, borderRadius: 5, background: dayOfMonth === n ? '#2563eb' : '#fff', fontSize: 10, fontWeight: 500, cursor: 'pointer', color: dayOfMonth === n ? '#fff' : '#374151', fontFamily: 'inherit', padding: 0 }}>{n}</button>
+                    ))}
+                  </div>
                 </div>
               </div>
             )}
