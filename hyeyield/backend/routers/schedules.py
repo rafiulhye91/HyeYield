@@ -64,7 +64,7 @@ async def list_schedules(
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
-        select(Schedule).where(Schedule.user_id == current_user.id, Schedule.enabled == True)
+        select(Schedule).where(Schedule.user_id == current_user.id)
     )
     schedules = result.scalars().all()
     out = []

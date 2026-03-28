@@ -10,6 +10,13 @@ const fmt       = (n) => n != null ? `$${Number(n).toLocaleString('en-US', { min
 const fmtShort  = (n) => n != null ? `$${Math.round(n).toLocaleString('en-US')}` : '—';
 const lastThree = (num) => num ? `...${String(num).slice(-3)}` : '';
 const fmtDate   = (d) => d ? new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : null;
+const fmtCST    = (iso) => {
+  if (!iso) return '';
+  const d = new Date(iso);
+  const date = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'America/Chicago' });
+  const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'America/Chicago' });
+  return `${date} · ${time} CT`;
+};
 
 const PILL_COLORS = [
   { bg: '#DBEAFE', color: '#1E40AF' },
@@ -321,9 +328,8 @@ export default function Dashboard() {
         )}
 
         {/* ── Investment Schedules ── */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+        <div style={{ marginBottom: 10 }}>
           {sectionLabel('Investment Schedules')}
-          <button onClick={() => setShowDialog(true)} style={{ width: 28, height: 28, borderRadius: '50%', background: '#2563eb', border: 'none', color: '#fff', fontSize: 20, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1 }}>+</button>
         </div>
 
         {schedules.length === 0 ? (
@@ -361,7 +367,6 @@ export default function Dashboard() {
 
         {/* ── Recent Invest Runs ── */}
         {(() => {
-          // Group individual trade log entries by account + minute
           const groups = {};
           history.forEach(log => {
             const d = new Date(log.created_at);
@@ -379,20 +384,22 @@ export default function Dashboard() {
             .sort((a, b) => new Date(b.date) - new Date(a.date))
             .slice(0, 10);
           if (!runs.length) return null;
+          // each row ~44px tall, show 5 rows
           return (
             <>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
                 {sectionLabel('Recent Invest Runs')}
+                <button onClick={() => navigate('/history')} style={{ padding: '4px 12px', background: '#fff', border: '0.5px solid rgba(0,0,0,0.15)', borderRadius: 6, fontSize: 11, cursor: 'pointer', color: '#6B7280', fontFamily: 'inherit' }}>
+                  View all
+                </button>
               </div>
               <div style={{ background: '#fff', borderRadius: 14, border: '0.5px solid rgba(0,0,0,0.07)', overflow: 'hidden', marginBottom: 28 }}>
-                <div style={{ maxHeight: 280, overflowY: 'auto' }}>
+                <div style={{ maxHeight: 220, overflowY: 'auto' }}>
                   {runs.map(run => {
                     const st = run.anyFailed ? 'failed' : run.anyPartial ? 'partial' : 'ok';
-                    const icon = { ok: { bg: '#DCFCE7', color: '#16A34A', ch: '✓' }, partial: { bg: '#FEF9C3', color: '#D97706', ch: '~' }, failed: { bg: '#FEE2E2', color: '#DC2626', ch: '✕' } }[st];
+                    const icon  = { ok: { bg: '#DCFCE7', color: '#16A34A', ch: '✓' }, partial: { bg: '#FEF9C3', color: '#D97706', ch: '~' }, failed: { bg: '#FEE2E2', color: '#DC2626', ch: '✕' } }[st];
                     const badge = { ok: { bg: '#DCFCE7', color: '#166534', lbl: run.isDryRun ? 'Test' : 'Filled' }, partial: { bg: '#FEF9C3', color: '#854F0B', lbl: 'Partial' }, failed: { bg: '#FEE2E2', color: '#991B1B', lbl: 'Failed' } }[st];
                     const orderSummary = run.orders.map(o => `${o.symbol}${o.shares ? ` ×${Math.round(o.shares)}` : ''}`).join(' · ');
-                    const runDate = new Date(run.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-                    const runTime = new Date(run.date).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
                     return (
                       <div key={run.key} style={{ padding: '10px 16px', borderBottom: '0.5px solid #F3F4F6', display: 'flex', alignItems: 'center', gap: 10 }}>
                         <div style={{ width: 24, height: 24, borderRadius: 7, background: icon.bg, color: icon.color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, flexShrink: 0 }}>{icon.ch}</div>
@@ -402,7 +409,7 @@ export default function Dashboard() {
                         </div>
                         <div style={{ textAlign: 'right', flexShrink: 0 }}>
                           <div style={{ fontSize: 12, fontWeight: 500, color: '#111827' }}>{run.total > 0 ? fmt(run.total) : '—'}</div>
-                          <div style={{ fontSize: 10, color: '#9CA3AF', marginTop: 1 }}>{runDate} · {runTime}</div>
+                          <div style={{ fontSize: 10, color: '#9CA3AF', marginTop: 1 }}>{fmtCST(run.date)}</div>
                           <span style={{ fontSize: 10, padding: '2px 6px', borderRadius: 99, fontWeight: 500, display: 'inline-block', marginTop: 2, background: badge.bg, color: badge.color }}>{badge.lbl}</span>
                         </div>
                       </div>
