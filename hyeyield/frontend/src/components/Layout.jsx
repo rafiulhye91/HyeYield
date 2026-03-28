@@ -1,21 +1,28 @@
+import { useCallback } from 'react';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useDashboard } from '../context/DashboardContext';
+import { useInactivityLogout } from '../hooks/useInactivityLogout';
 
 const NAV_LINKS = [
   { to: '/dashboard', label: 'Dashboard' },
-  { to: '/accounts', label: 'Accounts' },
   { to: '/history', label: 'History' },
   { to: '/settings', label: 'Settings' },
 ];
 
 export default function Layout({ children }) {
-  const { logout } = useAuth();
+  const { logout, user } = useAuth();
   const { reset } = useDashboard();
   const navigate = useNavigate();
   const { pathname } = useLocation();
 
-  const handleLogout = () => { logout(); reset(); navigate('/login'); };
+  const handleLogout = useCallback(() => {
+    logout();
+    reset();
+    navigate('/login');
+  }, [logout, reset, navigate]);
+
+  useInactivityLogout({ enabled: !!user, onLogout: handleLogout });
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--color-background-tertiary)' }}>
