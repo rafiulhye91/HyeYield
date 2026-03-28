@@ -300,6 +300,24 @@ def _parse_balance(data: list, account_number: str) -> dict:
     return {"total_value": None, "cash": None, "invested": None}
 
 
+@router.get("/schwab/instruments")
+async def search_instruments(
+    q: str,
+    current_user: User = Depends(get_current_user),
+):
+    """Typeahead search for equities/ETFs via Schwab instrument search."""
+    if not current_user.refresh_token_enc or len(q.strip()) < 1:
+        return []
+    client = SchwabClient(
+        app_key=current_user.get_app_key(),
+        app_secret=current_user.get_app_secret(),
+        refresh_token=current_user.get_refresh_token(),
+    )
+    access_token, new_refresh = await client.refresh_access_token()
+    current_user.set_refresh_token(new_refresh)
+    return await client.search_instruments(access_token, q.strip().upper())
+
+
 @router.get("/schwab/balances")
 async def get_balances(
     current_user: User = Depends(get_current_user),
