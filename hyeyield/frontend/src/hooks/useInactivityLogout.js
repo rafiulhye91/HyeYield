@@ -2,8 +2,7 @@ import { useEffect, useRef } from 'react';
 
 const INACTIVITY_MS = 1 * 60 * 1000;   // 1 minute (testing)
 
-// Intentional interactions only — no mousemove to avoid false resets on tab switch
-const ACTIVITY_EVENTS = ['mousedown', 'keydown', 'touchstart', 'scroll'];
+const ACTIVITY_EVENTS = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll'];
 
 /**
  * Logs the user out after INACTIVITY_MS of no interaction.
