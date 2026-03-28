@@ -110,6 +110,23 @@ class SchwabClient:
     # Market data
     # ------------------------------------------------------------------
 
+    async def search_instruments(self, access_token: str, query: str) -> list:
+        """Returns up to 10 matching instruments [{symbol, description}]."""
+        resp = await self._http.get(
+            f"{_SCHWAB_MARKET_URL}/instruments",
+            headers={"Authorization": f"Bearer {access_token}"},
+            params={"symbol": query, "projection": "symbol-search"},
+        )
+        if resp.status_code != 200:
+            return []
+        data = resp.json()
+        instruments = data.get("instruments", [])
+        return [
+            {"symbol": i["symbol"], "description": i.get("description", "")}
+            for i in instruments
+            if i.get("assetType") in ("EQUITY", "ETF", "MUTUAL_FUND")
+        ][:10]
+
     async def get_quote(self, access_token: str, symbol: str) -> float:
         """Returns the last price for a symbol."""
         logger.debug("Fetching quote for %s", symbol)

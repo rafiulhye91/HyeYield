@@ -1,27 +1,8 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import api from '../api/client';
 
-const ETF_LIST = [
-  { sym: 'SPUS',  name: 'SP Funds S&P 500 Sharia' },
-  { sym: 'HLAL',  name: 'Wahed FTSE USA Shariah ETF' },
-  { sym: 'ISIL',  name: 'iShares MSCI World Islamic' },
-  { sym: 'IAU',   name: 'iShares Gold Trust' },
-  { sym: 'VOO',   name: 'Vanguard S&P 500 ETF' },
-  { sym: 'VTI',   name: 'Vanguard Total Market' },
-  { sym: 'QQQ',   name: 'Invesco Nasdaq 100' },
-  { sym: 'SCHB',  name: 'Schwab Total Market' },
-  { sym: 'SCHF',  name: 'Schwab International' },
-  { sym: 'GLD',   name: 'SPDR Gold Shares' },
-  { sym: 'VDE',   name: 'Vanguard Energy ETF' },
-  { sym: 'VNQ',   name: 'Vanguard Real Estate ETF' },
-  { sym: 'BND',   name: 'Vanguard Total Bond Market' },
-  { sym: 'VWO',   name: 'Vanguard Emerging Markets' },
-  { sym: 'AAPL',  name: 'Apple Inc.' },
-  { sym: 'MSFT',  name: 'Microsoft Corp.' },
-  { sym: 'AMZN',  name: 'Amazon.com Inc.' },
-  { sym: 'NVDA',  name: 'NVIDIA Corp.' },
-  { sym: 'TSLA',  name: 'Tesla Inc.' },
-];
+// In-memory cache: query string → results array (persists for the dialog's lifetime)
+const _searchCache = new Map();
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
 const TIMEZONES = [
@@ -57,11 +38,24 @@ const dayBtn = (sel) => ({
 function AllocationRow({ row, onSymbol, onPct, onDelete, canDelete }) {
   const [query, setQuery] = useState(row.symbol);
   const [open, setOpen] = useState(false);
+  const [matches, setMatches] = useState([]);
   const blurTimer = useRef(null);
+  const debounceTimer = useRef(null);
 
-  const matches = query
-    ? ETF_LIST.filter(e => e.sym.startsWith(query.toUpperCase()) || e.name.toUpperCase().includes(query.toUpperCase())).slice(0, 6)
-    : [];
+  const search = useCallback((q) => {
+    const key = q.toUpperCase();
+    if (!key) { setMatches([]); return; }
+    if (_searchCache.has(key)) { setMatches(_searchCache.get(key)); return; }
+    clearTimeout(debounceTimer.current);
+    debounceTimer.current = setTimeout(async () => {
+      try {
+        const r = await api.get('/schwab/instruments', { params: { q: key } });
+        const results = r.data.map(i => ({ sym: i.symbol, name: i.description }));
+        _searchCache.set(key, results);
+        setMatches(results);
+      } catch { setMatches([]); }
+    }, 250);
+  }, []);
 
   const pick = (sym) => {
     clearTimeout(blurTimer.current);
@@ -77,8 +71,14 @@ function AllocationRow({ row, onSymbol, onPct, onDelete, canDelete }) {
           style={{ ...inp, textTransform: 'uppercase', fontWeight: 500 }}
           value={query}
           placeholder="Symbol or name..."
-          onChange={(e) => { setQuery(e.target.value); setOpen(true); onSymbol(e.target.value.toUpperCase()); }}
-          onFocus={() => { if (query) setOpen(true); }}
+          onChange={(e) => {
+            const v = e.target.value;
+            setQuery(v);
+            setOpen(true);
+            onSymbol(v.toUpperCase());
+            search(v);
+          }}
+          onFocus={() => { if (query) { setOpen(true); search(query); } }}
           onBlur={() => { blurTimer.current = setTimeout(() => setOpen(false), 160); }}
         />
         {open && matches.length > 0 && (
@@ -86,7 +86,7 @@ function AllocationRow({ row, onSymbol, onPct, onDelete, canDelete }) {
             {matches.map(e => (
               <div key={e.sym} onMouseDown={() => pick(e.sym)} style={{ padding: '9px 12px', fontSize: 12, cursor: 'pointer', display: 'flex', justifyContent: 'space-between', gap: 8 }}>
                 <span style={{ fontWeight: 500, color: '#111827' }}>{e.sym}</span>
-                <span style={{ color: '#9CA3AF', fontSize: 11 }}>{e.name}</span>
+                <span style={{ color: '#9CA3AF', fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.name}</span>
               </div>
             ))}
           </div>
