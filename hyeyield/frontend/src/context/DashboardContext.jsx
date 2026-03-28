@@ -42,7 +42,7 @@ export function DashboardProvider({ children }) {
     try {
       const [schedRes, histRes] = await Promise.all([
         fetchSchedules(),
-        api.get('/logs', { params: { page: 1, per_page: 50 } }).then(r => r.data.items || []).catch(() => []),
+        api.get('/logs', { params: { page: 1 } }).then(r => r.data).catch(() => []),
       ]);
       setSchedules(schedRes);
       setHistory(histRes.slice(0, 50));
@@ -129,7 +129,7 @@ export function DashboardProvider({ children }) {
       // Load schedules and history in parallel
       const [schedRes, histRes] = await Promise.all([
         fetchSchedules(),
-        api.get('/logs', { params: { page: 1, per_page: 50 } }).then(r => r.data.items || []).catch(() => []),
+        api.get('/logs', { params: { page: 1 } }).then(r => r.data).catch(() => []),
       ]);
       setSchedules(schedRes);
       setHistory(histRes.slice(0, 50));

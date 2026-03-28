@@ -129,36 +129,19 @@ async def get_logs(
     account_id: Optional[int] = Query(default=None),
     dry_run: Optional[bool] = Query(default=None),
     symbol: Optional[str] = Query(default=None),
-    status_filter: Optional[str] = Query(default=None, alias="status"),
-    date_from: Optional[str] = Query(default=None),
-    date_to: Optional[str] = Query(default=None),
     page: int = Query(default=1, ge=1),
-    per_page: int = Query(default=50, ge=1, le=1000),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    from sqlalchemy import func, and_
-    from datetime import datetime, timezone
-
-    base = select(TradeLog).where(TradeLog.user_id == current_user.id)
+    query = select(TradeLog).where(TradeLog.user_id == current_user.id)
     if account_id is not None:
-        base = base.where(TradeLog.account_id == account_id)
+        query = query.where(TradeLog.account_id == account_id)
     if dry_run is not None:
-        base = base.where(TradeLog.dry_run == dry_run)
+        query = query.where(TradeLog.dry_run == dry_run)
     if symbol is not None:
-        base = base.where(TradeLog.symbol == symbol.upper())
-    if status_filter:
-        base = base.where(TradeLog.status == status_filter.upper())
-    if date_from:
-        base = base.where(TradeLog.created_at >= datetime.fromisoformat(date_from))
-    if date_to:
-        base = base.where(TradeLog.created_at <= datetime.fromisoformat(date_to + "T23:59:59"))
+        query = query.where(TradeLog.symbol == symbol.upper())
 
-    # Total count
-    count_res = await db.execute(select(func.count()).select_from(base.subquery()))
-    total = count_res.scalar()
-
-    query = base.order_by(TradeLog.created_at.desc()).offset((page - 1) * per_page).limit(per_page)
+    query = query.order_by(TradeLog.created_at.desc()).offset((page - 1) * 50).limit(50)
     result = await db.execute(query)
     logs = result.scalars().all()
 
@@ -169,7 +152,7 @@ async def get_logs(
         accts_res = await db.execute(select(SchwabAccount).where(SchwabAccount.id.in_(account_ids)))
         acct_map = {a.id: a for a in accts_res.scalars().all()}
 
-    items = [
+    return [
         {
             "id": log.id,
             "account_id": log.account_id,
@@ -186,7 +169,6 @@ async def get_logs(
         }
         for log in logs
     ]
-    return {"items": items, "total": total, "page": page, "per_page": per_page}
 
 
 # ------------------------------------------------------------------
