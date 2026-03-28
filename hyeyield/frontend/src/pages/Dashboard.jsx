@@ -42,9 +42,13 @@ const schedTime = (s) => {
 
 const countdownLabel = (nextRun) => {
   if (!nextRun) return '';
-  const days = Math.ceil((new Date(nextRun) - Date.now()) / 86400000);
-  if (days <= 0) return 'today';
-  if (days === 1) return 'tomorrow';
+  const run  = new Date(nextRun);
+  const now  = new Date();
+  const todayStr     = now.toDateString();
+  const tomorrowStr  = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).toDateString();
+  if (run.toDateString() === todayStr)    return 'today';
+  if (run.toDateString() === tomorrowStr) return 'tomorrow';
+  const days = Math.round((run - now) / 86400000);
   return `in ${days} days`;
 };
 
@@ -255,7 +259,7 @@ function ScheduleRow({ s, dotColor, onToggle, onDelete, toggling }) {
 // ── Main page ─────────────────────────────────────────────────────────
 export default function Dashboard() {
   const navigate = useNavigate();
-  const { balances, schedules, loading, balancesLoading, syncing, sync, addSchedule, updateSchedule, removeSchedule } = useDashboard();
+  const { balances, schedules, history, loading, balancesLoading, syncing, sync, addSchedule, updateSchedule, removeSchedule } = useDashboard();
   const [hidden, setHidden]       = useState(true);
   const [showDialog, setShowDialog] = useState(false);
   const [toggling, setToggling]   = useState(false);
@@ -354,6 +358,61 @@ export default function Dashboard() {
             </div>
           </>
         )}
+
+        {/* ── Recent Invest Runs ── */}
+        {(() => {
+          // Group individual trade log entries by account + minute
+          const groups = {};
+          history.forEach(log => {
+            const d = new Date(log.created_at);
+            const key = `${log.account_id}_${d.getFullYear()}_${d.getMonth()}_${d.getDate()}_${d.getHours()}_${d.getMinutes()}`;
+            if (!groups[key]) groups[key] = {
+              key, accountName: log.account_name, accountNumber: log.account_number,
+              date: log.created_at, orders: [], total: 0, anyFailed: false, anyPartial: false, isDryRun: log.dry_run,
+            };
+            groups[key].orders.push(log);
+            groups[key].total += log.amount || 0;
+            if (log.status === 'FAILED' || log.status === 'REJECTED') groups[key].anyFailed = true;
+            if (log.status !== 'FILLED' && log.status !== 'FAILED' && log.status !== 'REJECTED') groups[key].anyPartial = true;
+          });
+          const runs = Object.values(groups)
+            .sort((a, b) => new Date(b.date) - new Date(a.date))
+            .slice(0, 10);
+          if (!runs.length) return null;
+          return (
+            <>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                {sectionLabel('Recent Invest Runs')}
+              </div>
+              <div style={{ background: '#fff', borderRadius: 14, border: '0.5px solid rgba(0,0,0,0.07)', overflow: 'hidden', marginBottom: 28 }}>
+                <div style={{ maxHeight: 280, overflowY: 'auto' }}>
+                  {runs.map(run => {
+                    const st = run.anyFailed ? 'failed' : run.anyPartial ? 'partial' : 'ok';
+                    const icon = { ok: { bg: '#DCFCE7', color: '#16A34A', ch: '✓' }, partial: { bg: '#FEF9C3', color: '#D97706', ch: '~' }, failed: { bg: '#FEE2E2', color: '#DC2626', ch: '✕' } }[st];
+                    const badge = { ok: { bg: '#DCFCE7', color: '#166534', lbl: run.isDryRun ? 'Test' : 'Filled' }, partial: { bg: '#FEF9C3', color: '#854F0B', lbl: 'Partial' }, failed: { bg: '#FEE2E2', color: '#991B1B', lbl: 'Failed' } }[st];
+                    const orderSummary = run.orders.map(o => `${o.symbol}${o.shares ? ` ×${Math.round(o.shares)}` : ''}`).join(' · ');
+                    const runDate = new Date(run.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                    const runTime = new Date(run.date).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+                    return (
+                      <div key={run.key} style={{ padding: '10px 16px', borderBottom: '0.5px solid #F3F4F6', display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <div style={{ width: 24, height: 24, borderRadius: 7, background: icon.bg, color: icon.color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, flexShrink: 0 }}>{icon.ch}</div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 12, fontWeight: 500, color: '#111827' }}>{run.accountName} {lastThree(run.accountNumber)}</div>
+                          <div style={{ fontSize: 11, color: '#9CA3AF', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{orderSummary}</div>
+                        </div>
+                        <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                          <div style={{ fontSize: 12, fontWeight: 500, color: '#111827' }}>{run.total > 0 ? fmt(run.total) : '—'}</div>
+                          <div style={{ fontSize: 10, color: '#9CA3AF', marginTop: 1 }}>{runDate} · {runTime}</div>
+                          <span style={{ fontSize: 10, padding: '2px 6px', borderRadius: 99, fontWeight: 500, display: 'inline-block', marginTop: 2, background: badge.bg, color: badge.color }}>{badge.lbl}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </>
+          );
+        })()}
 
         {/* ── Account Balances ── */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>

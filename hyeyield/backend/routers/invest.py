@@ -145,10 +145,19 @@ async def get_logs(
     result = await db.execute(query)
     logs = result.scalars().all()
 
+    # Fetch account info for all logs in one query
+    account_ids = list({log.account_id for log in logs if log.account_id})
+    acct_map = {}
+    if account_ids:
+        accts_res = await db.execute(select(SchwabAccount).where(SchwabAccount.id.in_(account_ids)))
+        acct_map = {a.id: a for a in accts_res.scalars().all()}
+
     return [
         {
             "id": log.id,
             "account_id": log.account_id,
+            "account_name": acct_map[log.account_id].account_name if log.account_id in acct_map else None,
+            "account_number": acct_map[log.account_id].account_number if log.account_id in acct_map else None,
             "symbol": log.symbol,
             "shares": log.shares,
             "price": log.price,

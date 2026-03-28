@@ -108,19 +108,6 @@ async def create_schedule(
             detail=f"Allocations must total 100% (got {total:.1f}%)",
         )
 
-    # Remove existing schedule for this account (one per account)
-    existing = await db.execute(
-        select(Schedule).where(
-            Schedule.user_id == current_user.id,
-            Schedule.account_id == body.account_id,
-        )
-    )
-    old = existing.scalar_one_or_none()
-    if old:
-        from backend.services.scheduler import remove_schedule_job
-        remove_schedule_job(old.id)
-        await db.delete(old)
-
     # Save schedule
     schedule = Schedule(
         user_id=current_user.id,

@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useRef } from 'react';
+import { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import api from '../api/client';
 import { useAuth } from './AuthContext';
 
@@ -23,6 +23,7 @@ export function DashboardProvider({ children }) {
   const [balancesLoading, setBalancesLoading] = useState(false);
   const [schedules, setSchedules] = useState(cache?.schedules || []);
   const [syncing, setSyncing] = useState(false);
+  const [history, setHistory] = useState(cache?.history || []);
   const initialized = useRef(!!cache);
 
   useEffect(() => {
@@ -31,6 +32,24 @@ export function DashboardProvider({ children }) {
     initialized.current = true;
     loadAccounts(true);
   }, [user]);
+
+  // Refresh schedules and history every 5 minutes so next_run stays current
+  const refreshSchedules = useCallback(async () => {
+    try {
+      const [schedRes, histRes] = await Promise.all([
+        fetchSchedules(),
+        api.get('/logs', { params: { page: 1 } }).then(r => r.data).catch(() => []),
+      ]);
+      setSchedules(schedRes);
+      setHistory(histRes.slice(0, 50));
+    } catch (_) {}
+  }, []);
+
+  useEffect(() => {
+    if (!user) return;
+    const id = setInterval(refreshSchedules, 5 * 60 * 1000);
+    return () => clearInterval(id);
+  }, [user, refreshSchedules]);
 
   const loadAccounts = async (withBalances = false) => {
     try {
@@ -64,9 +83,13 @@ export function DashboardProvider({ children }) {
       setRotations(map);
       setLoading(false);
 
-      // Load schedules in parallel
-      const schedRes = await fetchSchedules();
+      // Load schedules and history in parallel
+      const [schedRes, histRes] = await Promise.all([
+        fetchSchedules(),
+        api.get('/logs', { params: { page: 1 } }).then(r => r.data).catch(() => []),
+      ]);
       setSchedules(schedRes);
+      setHistory(histRes.slice(0, 50));
 
       if (withBalances) {
         setBalancesLoading(true);
@@ -76,11 +99,11 @@ export function DashboardProvider({ children }) {
           br.data.forEach((b) => { balanceMap[b.account_id] = b; });
           setBalances((prev) => {
             const updated = prev.map((c) => ({ ...c, ...(balanceMap[c.account_id] || {}) }));
-            saveCache({ balances: updated, connectedAccounts: connected, rotations: map, schedules: schedRes });
+            saveCache({ balances: updated, connectedAccounts: connected, rotations: map, schedules: schedRes, history: histRes.slice(0, 50) });
             return updated;
           });
         } catch (_) {
-          saveCache({ balances: cards, connectedAccounts: connected, rotations: map, schedules: schedRes });
+          saveCache({ balances: cards, connectedAccounts: connected, rotations: map, schedules: schedRes, history: histRes.slice(0, 50) });
         }
         setBalancesLoading(false);
       }
@@ -118,12 +141,13 @@ export function DashboardProvider({ children }) {
     setConnectedAccounts([]);
     setRotations({});
     setSchedules([]);
+    setHistory([]);
     setLoading(true);
     setBalancesLoading(false);
   };
 
   return (
-    <DashboardContext.Provider value={{ balances, connectedAccounts, rotations, schedules, loading, balancesLoading, syncing, sync, addSchedule, updateSchedule, removeSchedule, reset }}>
+    <DashboardContext.Provider value={{ balances, connectedAccounts, rotations, schedules, history, loading, balancesLoading, syncing, sync, addSchedule, updateSchedule, removeSchedule, reset }}>
       {children}
     </DashboardContext.Provider>
   );
