@@ -1,3 +1,4 @@
+from datetime import date
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -30,6 +31,7 @@ class ScheduleCreate(BaseModel):
     hour: int = 9
     minute: int = 35
     timezone: str = "America/Chicago"
+    end_date: Optional[date] = None
     allocations: List[AllocationIn]
 
 
@@ -55,6 +57,7 @@ def _schedule_out(schedule: Schedule, account: SchwabAccount, allocations, next_
         "minute": schedule.minute,
         "timezone": schedule.timezone,
         "enabled": schedule.enabled,
+        "end_date": schedule.end_date.isoformat() if schedule.end_date else None,
         "allocations": [{"symbol": a.symbol, "pct": a.target_pct} for a in allocations],
         "next_run": next_run_time,
     }
@@ -122,6 +125,7 @@ async def create_schedule(
         hour=body.hour,
         minute=body.minute,
         timezone=body.timezone,
+        end_date=body.end_date,
     )
     db.add(schedule)
     await db.flush()  # get schedule.id
@@ -184,6 +188,7 @@ async def update_schedule(
     schedule.hour = body.hour
     schedule.minute = body.minute
     schedule.timezone = body.timezone
+    schedule.end_date = body.end_date
 
     await db.execute(delete(Allocation).where(Allocation.account_id == body.account_id))
     for idx, a in enumerate(body.allocations):

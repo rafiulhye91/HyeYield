@@ -248,7 +248,9 @@ function ScheduleRow({ s, dotColor, onToggle, onDelete, onEdit, toggling }) {
           {!s.enabled && <span style={{ fontSize: 10, color: t.textFaint, fontWeight: 400, marginLeft: 4 }}>Paused</span>}
           {s.is_test && <span style={{ fontSize: 10, padding: '1px 5px', borderRadius: 99, background: '#FEF9C3', color: '#854F0B', fontWeight: 500, marginLeft: 5 }}>Test</span>}
         </div>
-        <div style={{ fontSize: 11, color: t.textFaint, marginTop: 1 }}>{freqLabel(s)}</div>
+        <div style={{ fontSize: 11, color: t.textFaint, marginTop: 1 }}>
+          {freqLabel(s)}{s.end_date ? ` · ends ${fmtDate(s.end_date + 'T00:00:00')}` : ''}
+        </div>
         <div style={{ display: 'flex', gap: 3, marginTop: 4, flexWrap: 'wrap' }}>
           {allocs.map((a, idx) => (
             <span key={a.symbol} style={{ fontSize: 10, padding: '2px 7px', borderRadius: 99, fontWeight: 500, background: PILL_COLORS[idx % PILL_COLORS.length].bg, color: PILL_COLORS[idx % PILL_COLORS.length].color }}>

@@ -140,6 +140,7 @@ export default function CreateScheduleDialog({ accounts, onClose, onSaved, editS
   const [minute, setMinute] = useState(editSchedule ? String(editSchedule.minute).padStart(2, '0') : '35');
   const [timezone, setTimezone] = useState(editSchedule?.timezone || 'America/Chicago');
   const [isTest, setIsTest] = useState(editSchedule ? editSchedule.is_test : true);
+  const [endDate, setEndDate] = useState(editSchedule?.end_date || '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -190,6 +191,7 @@ export default function CreateScheduleDialog({ accounts, onClose, onSaved, editS
       hour: parseInt(hour),
       minute: parseInt(minute),
       timezone,
+      end_date: endDate || null,
       allocations: validRows.map(r => ({ symbol: r.symbol, pct: parseFloat(r.pct) })),
     };
     try {
@@ -356,6 +358,30 @@ export default function CreateScheduleDialog({ accounts, onClose, onSaved, editS
             <div style={{ fontSize: 11, color: '#166534', background: '#F0FDF4', border: '0.5px solid #BBF7D0', padding: '6px 10px', borderRadius: 6, marginTop: 10 }}>
               {preview()}
             </div>
+          </div>
+
+          {/* End Date */}
+          <div>
+            <label style={labelStyle}>End date <span style={{ textTransform: 'none', fontWeight: 400, color: t.textFaint, letterSpacing: 0 }}>(optional)</span></label>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <input
+                type="date"
+                style={{ ...inp, flex: 1 }}
+                value={endDate}
+                min={new Date().toISOString().slice(0, 10)}
+                onChange={e => setEndDate(e.target.value)}
+              />
+              {endDate && (
+                <button onClick={() => setEndDate('')} style={{ padding: '6px 10px', background: 'none', border: `0.5px solid ${t.inputBorderLight}`, borderRadius: 8, fontSize: 12, cursor: 'pointer', color: t.textMuted, fontFamily: 'inherit' }}>
+                  Clear
+                </button>
+              )}
+            </div>
+            {endDate && (
+              <div style={{ fontSize: 11, color: t.textMuted, marginTop: 5 }}>
+                Schedule will automatically stop after <strong style={{ color: t.textPrimary }}>{new Date(endDate + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</strong>
+              </div>
+            )}
           </div>
 
           {/* Time */}
