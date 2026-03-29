@@ -22,7 +22,7 @@ class AllocationIn(BaseModel):
 
 class ScheduleCreate(BaseModel):
     account_id: int
-    name: Optional[str] = None
+    name: str
     is_test: bool = False
     frequency: str           # weekly | biweekly_1_15 | biweekly_alternating | monthly
     day_of_week: Optional[int] = None   # 0=Mon…4=Fri

@@ -165,6 +165,7 @@ export default function CreateScheduleDialog({ accounts, onClose, onSaved, editS
   };
 
   const save = async (isTestVal) => {
+    if (!name.trim()) { setError('Please enter a schedule name.'); return; }
     if (!accountId) { setError('Please select an account.'); return; }
     if (total !== 100) { setError(`Allocations must total 100% (currently ${total}%).`); return; }
     const validRows = rows.filter(r => r.symbol && r.pct);
@@ -220,7 +221,7 @@ export default function CreateScheduleDialog({ accounts, onClose, onSaved, editS
 
           {/* Name */}
           <div>
-            <label style={label}>Schedule name <span style={{ color: '#D1D5DB', fontWeight: 400 }}>(optional)</span></label>
+            <label style={label}>Schedule name</label>
             <input
               style={inp}
               value={name}
