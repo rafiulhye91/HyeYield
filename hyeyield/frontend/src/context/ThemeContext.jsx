@@ -62,19 +62,39 @@ export const DARK = {
 
 const ThemeContext = createContext(null);
 
+const mq = window.matchMedia('(prefers-color-scheme: dark)');
+
 export function ThemeProvider({ children }) {
   const [isDark, setIsDark] = useState(() => {
     const stored = localStorage.getItem('theme');
-    if (stored) return stored === 'dark';
-    return window.matchMedia('(prefers-color-scheme: dark)').matches;
+    if (stored === 'dark') return true;
+    if (stored === 'light') return false;
+    return mq.matches;
   });
 
+  // Keep body background in sync
   useEffect(() => {
-    localStorage.setItem('theme', isDark ? 'dark' : 'light');
     document.body.style.background = isDark ? DARK.pageBg : LIGHT.pageBg;
   }, [isDark]);
 
-  const toggle = () => setIsDark(d => !d);
+  // Follow OS changes only when no manual preference is saved
+  useEffect(() => {
+    const handler = (e) => {
+      if (!localStorage.getItem('theme')) setIsDark(e.matches);
+    };
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, []);
+
+  // Manual toggle: save to localStorage
+  const toggle = () => {
+    setIsDark(d => {
+      const next = !d;
+      localStorage.setItem('theme', next ? 'dark' : 'light');
+      return next;
+    });
+  };
+
   const t = isDark ? DARK : LIGHT;
 
   return <ThemeContext.Provider value={{ t, isDark, toggle }}>{children}</ThemeContext.Provider>;
