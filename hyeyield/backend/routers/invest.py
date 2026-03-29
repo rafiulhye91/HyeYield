@@ -130,6 +130,7 @@ async def get_logs(
     dry_run: Optional[bool] = Query(default=None),
     symbol: Optional[str] = Query(default=None),
     page: int = Query(default=1, ge=1),
+    per_page: int = Query(default=50, ge=1, le=1000),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -141,7 +142,7 @@ async def get_logs(
     if symbol is not None:
         query = query.where(TradeLog.symbol == symbol.upper())
 
-    query = query.order_by(TradeLog.created_at.desc()).offset((page - 1) * 50).limit(50)
+    query = query.order_by(TradeLog.created_at.desc()).offset((page - 1) * per_page).limit(per_page)
     result = await db.execute(query)
     logs = result.scalars().all()
 
