@@ -188,7 +188,7 @@ function HeroCard({ s, balance, onToggle, onDelete, onEdit, toggling }) {
             {s.name || `${s.account_name} ${lastThree(s.account_number)}`}
           </div>
           <div style={{ fontSize: 12, color: '#94b8d4', marginBottom: 10 }}>
-            {freqLabel(s)} · {s.is_test ? 'Test run' : 'Live'}
+            {freqLabel(s)} · {s.is_test ? 'Test run' : 'Live'}{s.end_date ? ` · ends ${fmtDate(s.end_date + 'T00:00:00')}` : ''}
           </div>
           <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
             {allocs.map(a => (
