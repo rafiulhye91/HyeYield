@@ -88,7 +88,7 @@ function AllocationRow({ row, onSymbol, onPct, onDelete, canDelete, inp }) {
 
 export default function CreateScheduleDialog({ accounts, onClose, onSaved, editSchedule }) {
   const isEdit = !!editSchedule;
-  const { t } = useTheme();
+  const { t, isDark } = useTheme();
 
   const inp = {
     width: '100%', padding: '8px 10px',
@@ -387,7 +387,7 @@ export default function CreateScheduleDialog({ accounts, onClose, onSaved, editS
               <label style={{ ...labelStyle, marginBottom: 0, flexShrink: 0 }}>End date</label>
               <input
                 type="date"
-                style={{ ...inp, flex: 1, fontSize: 12, padding: '5px 8px', height: 'auto' }}
+                style={{ ...inp, flex: 1, fontSize: 12, padding: '5px 8px', height: 'auto', colorScheme: isDark ? 'dark' : 'light' }}
                 value={endDate}
                 min={new Date().toISOString().slice(0, 10)}
                 onChange={e => setEndDate(e.target.value)}
