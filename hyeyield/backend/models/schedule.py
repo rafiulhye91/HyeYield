@@ -1,7 +1,7 @@
-from datetime import datetime
+from datetime import date, datetime
 from typing import Optional
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, func
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from backend.database import Base
@@ -23,6 +23,8 @@ class Schedule(Base):
     hour: Mapped[int] = mapped_column(Integer, nullable=False, default=9)
     minute: Mapped[int] = mapped_column(Integer, nullable=False, default=35)
     timezone: Mapped[str] = mapped_column(String(50), nullable=False, default="America/Chicago")
+
+    end_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
 
     is_test: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)

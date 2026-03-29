@@ -88,7 +88,7 @@ function AllocationRow({ row, onSymbol, onPct, onDelete, canDelete, inp }) {
 
 export default function CreateScheduleDialog({ accounts, onClose, onSaved, editSchedule }) {
   const isEdit = !!editSchedule;
-  const { t } = useTheme();
+  const { t, isDark } = useTheme();
 
   const inp = {
     width: '100%', padding: '8px 10px',
@@ -140,6 +140,7 @@ export default function CreateScheduleDialog({ accounts, onClose, onSaved, editS
   const [minute, setMinute] = useState(editSchedule ? String(editSchedule.minute).padStart(2, '0') : '35');
   const [timezone, setTimezone] = useState(editSchedule?.timezone || 'America/Chicago');
   const [isTest, setIsTest] = useState(editSchedule ? editSchedule.is_test : true);
+  const [endDate, setEndDate] = useState(editSchedule?.end_date || '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -156,12 +157,20 @@ export default function CreateScheduleDialog({ accounts, onClose, onSaved, editS
   const preview = () => {
     const tv = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
     const tz = TIMEZONES.find(x => x.value === timezone)?.label.split(' ')[0] || 'CST';
-    if (frequency === 'weekly') return `Every ${DAYS[dayOfWeek]} at ${tv} ${tz}`;
-    if (frequency === 'biweekly') {
-      if (biweeklyType === 'biweekly_1_15') return `1st & 15th of each month at ${tv} ${tz}`;
-      return `Every other ${DAYS[dayOfWeek]} at ${tv} ${tz}`;
+    let base;
+    if (frequency === 'weekly') base = `Every ${DAYS[dayOfWeek]} at ${tv} ${tz}`;
+    else if (frequency === 'biweekly') {
+      base = biweeklyType === 'biweekly_1_15'
+        ? `1st & 15th of each month at ${tv} ${tz}`
+        : `Every other ${DAYS[dayOfWeek]} at ${tv} ${tz}`;
+    } else {
+      base = `Monthly on the ${dayOfMonth}${['th','st','nd','rd'][dayOfMonth % 10 < 4 && (dayOfMonth < 11 || dayOfMonth > 13) ? dayOfMonth % 10 : 0] || 'th'} at ${tv} ${tz}`;
     }
-    return `Monthly on the ${dayOfMonth}${['th','st','nd','rd'][dayOfMonth % 10 < 4 && (dayOfMonth < 11 || dayOfMonth > 13) ? dayOfMonth % 10 : 0] || 'th'} at ${tv} ${tz}`;
+    if (endDate) {
+      const d = new Date(endDate + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      base += ` · ends ${d}`;
+    }
+    return base;
   };
 
   const save = async (isTestVal) => {
@@ -190,6 +199,7 @@ export default function CreateScheduleDialog({ accounts, onClose, onSaved, editS
       hour: parseInt(hour),
       minute: parseInt(minute),
       timezone,
+      end_date: endDate || null,
       allocations: validRows.map(r => ({ symbol: r.symbol, pct: parseFloat(r.pct) })),
     };
     try {
@@ -352,10 +362,6 @@ export default function CreateScheduleDialog({ accounts, onClose, onSaved, editS
               </div>
             )}
 
-            {/* Preview */}
-            <div style={{ fontSize: 11, color: '#166534', background: '#F0FDF4', border: '0.5px solid #BBF7D0', padding: '6px 10px', borderRadius: 6, marginTop: 10 }}>
-              {preview()}
-            </div>
           </div>
 
           {/* Time */}
@@ -374,6 +380,31 @@ export default function CreateScheduleDialog({ accounts, onClose, onSaved, editS
 
         {/* Footer */}
         <div style={{ padding: '14px 20px', borderTop: `0.5px solid ${t.cardBorder}` }}>
+
+          {/* End Date */}
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <label style={{ ...labelStyle, marginBottom: 0, flexShrink: 0 }}>End date</label>
+              <input
+                type="date"
+                style={{ ...inp, flex: 1, fontSize: 12, padding: '5px 8px', height: 'auto', colorScheme: isDark ? 'dark' : 'light' }}
+                value={endDate}
+                min={new Date().toISOString().slice(0, 10)}
+                onChange={e => setEndDate(e.target.value)}
+              />
+              {endDate && (
+                <button onClick={() => setEndDate('')} style={{ padding: '4px 8px', background: 'none', border: `0.5px solid ${t.inputBorderLight}`, borderRadius: 6, fontSize: 11, cursor: 'pointer', color: t.textMuted, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
+                  Clear
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Preview */}
+          <div style={{ fontSize: 11, color: '#166534', background: '#F0FDF4', border: '0.5px solid #BBF7D0', padding: '6px 10px', borderRadius: 6, marginBottom: 12 }}>
+            {preview()}
+          </div>
+
           {/* Test Run / Live Invest toggle */}
           <div style={{ display: 'flex', gap: 0, marginBottom: 12, background: t.toggleBg, borderRadius: 8, padding: 3 }}>
             {[{ label: 'Test Run', val: true }, { label: 'Live Invest', val: false }].map(opt => (

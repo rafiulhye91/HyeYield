@@ -1,4 +1,5 @@
 import logging
+from datetime import date
 
 import pytz
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -248,6 +249,13 @@ async def scheduled_invest_schedule(schedule_id: int) -> None:
         schedule = sched_res.scalar_one_or_none()
         if not schedule or not schedule.enabled:
             logger.warning("schedule_id=%d not found or disabled, skipping", schedule_id)
+            return
+
+        if schedule.end_date and date.today() > schedule.end_date:
+            logger.info("schedule_id=%d past end_date %s, disabling", schedule_id, schedule.end_date)
+            schedule.enabled = False
+            await db.commit()
+            remove_schedule_job(schedule_id)
             return
 
         user_res = await db.execute(select(User).where(User.id == schedule.user_id))
