@@ -4,7 +4,6 @@ import { useDashboard } from '../context/DashboardContext';
 
 const NAV_LINKS = [
   { to: '/dashboard', label: 'Dashboard' },
-  { to: '/accounts', label: 'Accounts' },
   { to: '/history', label: 'History' },
   { to: '/settings', label: 'Settings' },
 ];
