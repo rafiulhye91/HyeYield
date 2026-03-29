@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, useCallback } from 'react';
+import { useEffect, useState, useMemo, useCallback, Fragment } from 'react';
 import Layout from '../components/Layout';
 import api from '../api/client';
 
@@ -16,10 +16,29 @@ const fmt$ = (n) => n != null
   ? `$${Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
   : '—';
 
+const fmtP  = (n) => n != null ? `$${Number(n).toFixed(2)}` : '—';
+const fmtSh = (n) => n != null ? (Number.isInteger(n) ? String(n) : Number(n).toFixed(4).replace(/\.?0+$/, '')) : '—';
+
 const STATUS_BADGE = {
   Filled:   { bg: '#DCFCE7', color: '#166534' },
   Partial:  { bg: '#FEF9C3', color: '#854F0B' },
   Failed:   { bg: '#FEE2E2', color: '#991B1B' },
+};
+
+const CHIP_COLORS = {
+  SPUS: { bg: '#EFF6FF', color: '#1D4ED8' },
+  IAU:  { bg: '#FFFBEB', color: '#B45309' },
+  VDE:  { bg: '#FFF7ED', color: '#C2410C' },
+  VOO:  { bg: '#F5F3FF', color: '#5B21B6' },
+  HLAL: { bg: '#ECFDF5', color: '#065F46' },
+};
+
+const ETF_NAMES = {
+  SPUS: 'SP Funds S&P 500 Sharia',
+  IAU:  'iShares Gold Trust',
+  VDE:  'Vanguard Energy ETF',
+  VOO:  'Vanguard S&P 500 ETF',
+  HLAL: 'Wahed Shariah ETF',
 };
 
 function Badge({ label, style }) {
@@ -30,7 +49,7 @@ function Badge({ label, style }) {
   );
 }
 
-// Group raw logs by account + minute (same as dashboard Recent Invest Runs)
+// Group raw logs by account + minute, preserving individual orders
 function groupLogs(logs) {
   const groups = {};
   logs.forEach(log => {
@@ -48,27 +67,31 @@ function groupLogs(logs) {
         anyFailed: false,
         anyPartial: false,
         isDryRun: log.dry_run,
+        orders: [],
       };
     }
     groups[key].total += log.amount || 0;
     if (log.status === 'FAILED' || log.status === 'REJECTED') groups[key].anyFailed = true;
     if (log.status !== 'FILLED' && log.status !== 'FAILED' && log.status !== 'REJECTED') groups[key].anyPartial = true;
+    groups[key].orders.push(log);
   });
   return Object.values(groups).sort((a, b) => new Date(b.date) - new Date(a.date));
 }
 
 const COLS = [
-  { key: 'date',     label: 'Date',            width: 160 },
-  { key: 'schedule', label: 'Schedule',        width: 160 },
-  { key: 'account',  label: 'Account',         width: 140 },
-  { key: 'total',    label: 'Amount Invested', width: 120, right: true },
-  { key: 'status',   label: 'Status',          width: 85  },
-  { key: 'type',     label: 'Type',            width: 75  },
+  { key: 'chevron',  label: '',               width: 32 },
+  { key: 'date',     label: 'Date',           width: 155 },
+  { key: 'schedule', label: 'Schedule',       width: 150 },
+  { key: 'account',  label: 'Account',        width: 135 },
+  { key: 'total',    label: 'Amount',         width: 110, right: true },
+  { key: 'status',   label: 'Status',         width: 80,  center: true },
+  { key: 'type',     label: 'Type',           width: 75,  center: true },
 ];
 
 export default function History() {
   const [allLogs, setAllLogs] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [openRow, setOpenRow] = useState(null);
 
   // Filters (inputs)
   const [fFrom,   setFFrom]   = useState('');
@@ -156,9 +179,12 @@ export default function History() {
   const pageSlice  = sorted.slice((curPage - 1) * perPage, curPage * perPage);
 
   const handleSort = (col) => {
+    if (col === 'chevron') return;
     if (sortCol === col) setSortDir(d => d * -1);
     else { setSortCol(col); setSortDir(-1); }
   };
+
+  const toggleRow = (key) => setOpenRow(prev => prev === key ? null : key);
 
   const stats = useMemo(() => ({
     filled:  filtered.filter(r => !r.anyFailed && !r.anyPartial).length,
@@ -217,6 +243,8 @@ export default function History() {
 
   return (
     <Layout>
+      <style>{`@keyframes slideDown{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}`}</style>
+
       {/* Page header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
         <div style={{ fontSize: 15, fontWeight: 500, color: '#111827' }}>Trade history</div>
@@ -319,9 +347,11 @@ export default function History() {
               <tr>
                 {COLS.map(col => (
                   <th key={col.key} onClick={() => handleSort(col.key)} style={{
-                    textAlign: col.right ? 'right' : 'left', padding: '9px 12px',
+                    textAlign: col.right ? 'right' : col.center ? 'center' : 'left',
+                    padding: col.key === 'chevron' ? '9px 0 9px 12px' : '9px 12px',
                     fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em',
-                    cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap', width: col.width,
+                    cursor: col.key === 'chevron' ? 'default' : 'pointer', userSelect: 'none',
+                    whiteSpace: 'nowrap', width: col.width,
                     color: sortCol === col.key ? '#2563eb' : '#9CA3AF',
                   }}>
                     {col.label}{sortCol === col.key ? (sortDir === -1 ? ' ↓' : ' ↑') : ''}
@@ -331,22 +361,102 @@ export default function History() {
             </thead>
             <tbody>
               {pageSlice.length === 0 ? (
-                <tr><td colSpan={6} style={{ textAlign: 'center', color: '#9CA3AF', padding: 40, fontSize: 13 }}>No runs match your filters</td></tr>
+                <tr><td colSpan={7} style={{ textAlign: 'center', color: '#9CA3AF', padding: 40, fontSize: 13 }}>No runs match your filters</td></tr>
               ) : pageSlice.map(r => {
+                const isOpen = openRow === r.key;
                 const acctLabel = r.accountName ? `${r.accountName} ...${String(r.accountNumber || '').slice(-3)}` : (r.accountId || '—');
                 const statusLabel = r.anyFailed ? 'Failed' : r.anyPartial ? 'Partial' : 'Filled';
                 const badge = STATUS_BADGE[statusLabel];
                 return (
-                  <tr key={r.key} style={{ borderBottom: '0.5px solid #F3F4F6' }}
-                    onMouseEnter={e => Array.from(e.currentTarget.cells).forEach(c => c.style.background = '#FAFBFC')}
-                    onMouseLeave={e => Array.from(e.currentTarget.cells).forEach(c => c.style.background = '')}>
-                    <td style={{ padding: '9px 12px', fontSize: 11, color: '#6B7280', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{fmtCT(r.date)}</td>
-                    <td style={{ padding: '9px 12px', fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.scheduleName || '—'}</td>
-                    <td style={{ padding: '9px 12px', fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{acctLabel}</td>
-                    <td style={{ padding: '9px 12px', textAlign: 'right', fontWeight: 500 }}>{fmt$(r.total)}</td>
-                    <td style={{ padding: '9px 12px' }}><Badge label={statusLabel} style={badge} /></td>
-                    <td style={{ padding: '9px 12px' }}><Badge label={r.isDryRun ? 'Dry run' : 'Live'} style={r.isDryRun ? { bg: '#F3F4F6', color: '#6B7280' } : { bg: '#DCFCE7', color: '#166534' }} /></td>
-                  </tr>
+                  <Fragment key={r.key}>
+                    <tr
+                      onClick={() => toggleRow(r.key)}
+                      style={{ borderBottom: isOpen ? 'none' : '0.5px solid #F3F4F6', cursor: 'pointer', background: isOpen ? '#F0F7FF' : undefined }}
+                      onMouseEnter={e => { if (!isOpen) Array.from(e.currentTarget.cells).forEach(c => c.style.background = '#FAFBFC'); }}
+                      onMouseLeave={e => { if (!isOpen) Array.from(e.currentTarget.cells).forEach(c => c.style.background = ''); }}
+                    >
+                      <td style={{ padding: '9px 0 9px 12px', width: 32 }}>
+                        <span style={{
+                          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                          color: isOpen ? '#3B82F6' : '#C4C9D4',
+                          transition: 'transform 0.2s, color 0.2s',
+                          transform: isOpen ? 'rotate(90deg)' : 'none',
+                        }}>
+                          <svg width="8" height="12" viewBox="0 0 8 12" fill="none">
+                            <path d="M2 2l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                          </svg>
+                        </span>
+                      </td>
+                      <td style={{ padding: '9px 12px', fontSize: 11, color: '#6B7280', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{fmtCT(r.date)}</td>
+                      <td style={{ padding: '9px 12px', fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.scheduleName || '—'}</td>
+                      <td style={{ padding: '9px 12px', fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{acctLabel}</td>
+                      <td style={{ padding: '9px 12px', textAlign: 'right', fontWeight: 600, fontSize: 12 }}>{fmt$(r.total)}</td>
+                      <td style={{ padding: '9px 12px', textAlign: 'center' }}><Badge label={statusLabel} style={badge} /></td>
+                      <td style={{ padding: '9px 12px', textAlign: 'center' }}><Badge label={r.isDryRun ? 'Dry run' : 'Live'} style={r.isDryRun ? { bg: '#F3F4F6', color: '#6B7280' } : { bg: '#DCFCE7', color: '#166534' }} /></td>
+                    </tr>
+                    {isOpen && (
+                      <tr style={{ borderBottom: '0.5px solid #DBEAFE' }}>
+                        <td colSpan={7} style={{ padding: 0, background: '#F8FBFF', animation: 'slideDown 0.16s ease' }}>
+                          {/* Detail panel header */}
+                          <div style={{ display: 'grid', gridTemplateColumns: '2.4fr 0.9fr 1fr 1fr 0.85fr', gap: 8, padding: '8px 16px 7px 52px', background: '#EEF4FF', borderBottom: '0.5px solid #DBEAFE' }}>
+                            {['ETF / Stock', 'Shares', 'Price / share', 'Total cost', 'Status'].map((h, i) => (
+                              <div key={h} style={{ fontSize: 10, fontWeight: 700, color: '#93C5FD', textTransform: 'uppercase', letterSpacing: '0.07em', textAlign: i > 0 ? 'right' : 'left' }}>{h}</div>
+                            ))}
+                          </div>
+                          {/* Order rows */}
+                          {r.orders.map((order, idx) => {
+                            const chip = CHIP_COLORS[order.symbol] || { bg: '#F3F4F6', color: '#374151' };
+                            const isSkipped = order.status !== 'FILLED';
+                            const orderStatus = order.status === 'FILLED' ? 'Filled'
+                              : (order.status === 'SKIPPED' || order.status === 'REJECTED') ? 'Skipped' : 'Failed';
+                            const orderBadge = orderStatus === 'Filled'
+                              ? { bg: '#ECFDF5', color: '#065F46' }
+                              : orderStatus === 'Skipped'
+                              ? { bg: '#F3F4F6', color: '#9CA3AF' }
+                              : { bg: '#FEF2F2', color: '#991B1B' };
+                            return (
+                              <div key={idx} style={{
+                                display: 'grid', gridTemplateColumns: '2.4fr 0.9fr 1fr 1fr 0.85fr', gap: 8,
+                                padding: '10px 16px 10px 52px', borderBottom: idx < r.orders.length - 1 ? '0.5px solid #EDF2FB' : 'none',
+                                alignItems: 'center',
+                              }}>
+                                {/* Symbol cell */}
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+                                  <div style={{ width: 42, height: 34, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 800, flexShrink: 0, letterSpacing: '0.03em', background: chip.bg, color: chip.color }}>
+                                    {order.symbol}
+                                  </div>
+                                  <div>
+                                    <div style={{ fontSize: 12, color: '#374151', fontWeight: 500 }}>{ETF_NAMES[order.symbol] || order.symbol}</div>
+                                    {isSkipped && order.message && (
+                                      <div style={{ fontSize: 10, color: '#D1D5DB', marginTop: 1, fontStyle: 'italic' }}>{order.message}</div>
+                                    )}
+                                  </div>
+                                </div>
+                                {/* Shares */}
+                                <div style={{ fontSize: 12, fontWeight: 500, color: isSkipped ? '#D1D5DB' : '#374151', textAlign: 'right', fontStyle: isSkipped ? 'italic' : 'normal' }}>
+                                  {isSkipped ? '—' : fmtSh(order.shares)}
+                                </div>
+                                {/* Price/share */}
+                                <div style={{ fontSize: 12, fontWeight: 500, color: isSkipped ? '#D1D5DB' : '#374151', textAlign: 'right', fontStyle: isSkipped ? 'italic' : 'normal' }}>
+                                  {isSkipped ? '—' : fmtP(order.price)}
+                                </div>
+                                {/* Total cost */}
+                                <div style={{ fontSize: 13, fontWeight: 700, color: isSkipped ? '#D1D5DB' : '#111827', textAlign: 'right', fontStyle: isSkipped ? 'italic' : 'normal' }}>
+                                  {isSkipped ? '—' : fmt$(order.amount)}
+                                </div>
+                                {/* Status badge */}
+                                <div style={{ textAlign: 'right' }}>
+                                  <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 99, fontWeight: 600, letterSpacing: '0.02em', display: 'inline-block', background: orderBadge.bg, color: orderBadge.color }}>
+                                    {orderStatus}
+                                  </span>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
                 );
               })}
             </tbody>
