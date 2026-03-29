@@ -384,6 +384,7 @@ export default function Dashboard() {
             const key = `${log.account_id}_${d.getFullYear()}_${d.getMonth()}_${d.getDate()}_${d.getHours()}_${d.getMinutes()}`;
             if (!groups[key]) groups[key] = {
               key, accountName: log.account_name, accountNumber: log.account_number,
+              scheduleName: log.schedule_name || null,
               date: log.created_at, orders: [], total: 0, anyFailed: false, anyPartial: false, isDryRun: log.dry_run,
             };
             groups[key].orders.push(log);
@@ -415,8 +416,10 @@ export default function Dashboard() {
                       <div key={run.key} style={{ padding: '10px 16px', borderBottom: '0.5px solid #F3F4F6', display: 'flex', alignItems: 'center', gap: 10 }}>
                         <div style={{ width: 24, height: 24, borderRadius: 7, background: icon.bg, color: icon.color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, flexShrink: 0 }}>{icon.ch}</div>
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: 12, fontWeight: 500, color: '#111827' }}>{run.accountName} {lastThree(run.accountNumber)}</div>
-                          <div style={{ fontSize: 11, color: '#9CA3AF', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{orderSummary}</div>
+                          <div style={{ fontSize: 12, fontWeight: 500, color: '#111827' }}>{run.scheduleName || `${run.accountName} ${lastThree(run.accountNumber)}`}</div>
+                          <div style={{ fontSize: 11, color: '#9CA3AF', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {run.scheduleName ? `${run.accountName} ${lastThree(run.accountNumber)} · ` : ''}{orderSummary}
+                          </div>
                         </div>
                         <div style={{ textAlign: 'right', flexShrink: 0 }}>
                           <div style={{ fontSize: 12, fontWeight: 500, color: '#111827' }}>{run.total > 0 ? fmt(run.total) : '—'}</div>
