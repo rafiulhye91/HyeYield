@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback } from 'react';
 import api from '../api/client';
+import { useTheme } from '../context/ThemeContext';
 
 // In-memory cache: query string → results array (persists for the dialog's lifetime)
 const _searchCache = new Map();
@@ -12,35 +13,13 @@ const TIMEZONES = [
   { value: 'America/Los_Angeles',label: 'PST / PDT (Pacific)' },
 ];
 
-const inp = {
-  width: '100%', padding: '8px 10px',
-  border: '1px solid #D1D5DB', borderRadius: 8,
-  fontSize: 13, background: '#fff', color: '#111827',
-  fontFamily: 'inherit', boxSizing: 'border-box',
-};
-const label = { fontSize: 11, fontWeight: 500, color: '#9CA3AF', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block' };
-const tabBtn = (sel) => ({
-  flex: 1, padding: '8px 6px', border: '1px solid', borderRadius: 8,
-  textAlign: 'center', cursor: 'pointer', fontSize: 12, fontFamily: 'inherit',
-  borderColor: sel ? '#2563eb' : '#D1D5DB',
-  background: sel ? '#EFF6FF' : '#fff',
-  color: sel ? '#1E40AF' : '#374151',
-  fontWeight: sel ? 500 : 400,
-});
-const dayBtn = (sel) => ({
-  flex: 1, minWidth: 44, padding: '8px 4px',
-  border: `1px solid ${sel ? '#2563eb' : '#D1D5DB'}`,
-  borderRadius: 8, background: sel ? '#2563eb' : '#fff',
-  fontSize: 12, fontWeight: 500, cursor: 'pointer',
-  color: sel ? '#fff' : '#374151', fontFamily: 'inherit',
-});
-
-function AllocationRow({ row, onSymbol, onPct, onDelete, canDelete }) {
+function AllocationRow({ row, onSymbol, onPct, onDelete, canDelete, inp }) {
   const [query, setQuery] = useState(row.symbol);
   const [open, setOpen] = useState(false);
   const [matches, setMatches] = useState([]);
   const blurTimer = useRef(null);
   const debounceTimer = useRef(null);
+  const { t } = useTheme();
 
   const search = useCallback((q) => {
     const key = q.toUpperCase();
@@ -82,11 +61,11 @@ function AllocationRow({ row, onSymbol, onPct, onDelete, canDelete }) {
           onBlur={() => { blurTimer.current = setTimeout(() => setOpen(false), 160); }}
         />
         {open && matches.length > 0 && (
-          <div style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0, background: '#fff', border: '1px solid #D1D5DB', borderRadius: 8, zIndex: 99, boxShadow: '0 4px 16px rgba(0,0,0,0.1)', overflow: 'hidden' }}>
+          <div style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0, background: t.cardBg, border: `1px solid ${t.inputBorderLight}`, borderRadius: 8, zIndex: 99, boxShadow: '0 4px 16px rgba(0,0,0,0.1)', overflow: 'hidden' }}>
             {matches.map(e => (
               <div key={e.sym} onMouseDown={() => pick(e.sym)} style={{ padding: '9px 12px', fontSize: 12, cursor: 'pointer', display: 'flex', justifyContent: 'space-between', gap: 8 }}>
-                <span style={{ fontWeight: 500, color: '#111827' }}>{e.sym}</span>
-                <span style={{ color: '#9CA3AF', fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.name}</span>
+                <span style={{ fontWeight: 500, color: t.textPrimary }}>{e.sym}</span>
+                <span style={{ color: t.textFaint, fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.name}</span>
               </div>
             ))}
           </div>
@@ -100,15 +79,39 @@ function AllocationRow({ row, onSymbol, onPct, onDelete, canDelete }) {
           placeholder="0"
           onChange={(e) => onPct(e.target.value)}
         />
-        <span style={{ fontSize: 13, color: '#6B7280', fontWeight: 500 }}>%</span>
+        <span style={{ fontSize: 13, color: t.textMuted, fontWeight: 500 }}>%</span>
       </div>
-      <button onClick={onDelete} disabled={!canDelete} style={{ width: 26, height: 26, border: 'none', background: 'none', cursor: canDelete ? 'pointer' : 'default', color: canDelete ? '#D1D5DB' : '#F3F4F6', fontSize: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 6, flexShrink: 0 }}>×</button>
+      <button onClick={onDelete} disabled={!canDelete} style={{ width: 26, height: 26, border: 'none', background: 'none', cursor: canDelete ? 'pointer' : 'default', color: canDelete ? t.inputBorderLight : t.cardBorder, fontSize: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 6, flexShrink: 0 }}>×</button>
     </div>
   );
 }
 
 export default function CreateScheduleDialog({ accounts, onClose, onSaved, editSchedule }) {
   const isEdit = !!editSchedule;
+  const { t } = useTheme();
+
+  const inp = {
+    width: '100%', padding: '8px 10px',
+    border: `1px solid ${t.inputBorderLight}`, borderRadius: 8,
+    fontSize: 13, background: t.inputBg, color: t.textPrimary,
+    fontFamily: 'inherit', boxSizing: 'border-box',
+  };
+  const labelStyle = { fontSize: 11, fontWeight: 500, color: t.textFaint, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block' };
+  const tabBtn = (sel) => ({
+    flex: 1, padding: '8px 6px', border: '1px solid', borderRadius: 8,
+    textAlign: 'center', cursor: 'pointer', fontSize: 12, fontFamily: 'inherit',
+    borderColor: sel ? '#2563eb' : t.inputBorderLight,
+    background: sel ? '#EFF6FF' : t.cardBg,
+    color: sel ? '#1E40AF' : t.textSecondary,
+    fontWeight: sel ? 500 : 400,
+  });
+  const dayBtn = (sel) => ({
+    flex: 1, minWidth: 44, padding: '8px 4px',
+    border: `1px solid ${sel ? '#2563eb' : t.inputBorderLight}`,
+    borderRadius: 8, background: sel ? '#2563eb' : t.cardBg,
+    fontSize: 12, fontWeight: 500, cursor: 'pointer',
+    color: sel ? '#fff' : t.textSecondary, fontFamily: 'inherit',
+  });
 
   const initFreq = () => {
     if (!editSchedule) return 'weekly';
@@ -150,18 +153,15 @@ export default function CreateScheduleDialog({ accounts, onClose, onSaved, editS
   const updateRow = (id, field, val) => setRows(r => r.map(x => x.id === id ? { ...x, [field]: val } : x));
   const deleteRow = (id) => setRows(r => r.filter(x => x.id !== id));
 
-  const freqValue = frequency === 'biweekly_1_15' || frequency === 'biweekly_alternating'
-    ? frequency : frequency === 'biweekly' ? biweeklyType : frequency;
-
   const preview = () => {
-    const t = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+    const tv = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
     const tz = TIMEZONES.find(x => x.value === timezone)?.label.split(' ')[0] || 'CST';
-    if (frequency === 'weekly') return `Every ${DAYS[dayOfWeek]} at ${t} ${tz}`;
+    if (frequency === 'weekly') return `Every ${DAYS[dayOfWeek]} at ${tv} ${tz}`;
     if (frequency === 'biweekly') {
-      if (biweeklyType === 'biweekly_1_15') return `1st & 15th of each month at ${t} ${tz}`;
-      return `Every other ${DAYS[dayOfWeek]} at ${t} ${tz}`;
+      if (biweeklyType === 'biweekly_1_15') return `1st & 15th of each month at ${tv} ${tz}`;
+      return `Every other ${DAYS[dayOfWeek]} at ${tv} ${tz}`;
     }
-    return `Monthly on the ${dayOfMonth}${['th','st','nd','rd'][dayOfMonth % 10 < 4 && (dayOfMonth < 11 || dayOfMonth > 13) ? dayOfMonth % 10 : 0] || 'th'} at ${t} ${tz}`;
+    return `Monthly on the ${dayOfMonth}${['th','st','nd','rd'][dayOfMonth % 10 < 4 && (dayOfMonth < 11 || dayOfMonth > 13) ? dayOfMonth % 10 : 0] || 'th'} at ${tv} ${tz}`;
   };
 
   const save = async (isTestVal) => {
@@ -206,13 +206,13 @@ export default function CreateScheduleDialog({ accounts, onClose, onSaved, editS
   };
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, padding: 20 }}>
-      <div style={{ background: '#fff', borderRadius: 14, border: '0.5px solid rgba(0,0,0,0.1)', width: '100%', maxWidth: 500, boxShadow: '0 4px 24px rgba(0,0,0,0.08)', maxHeight: '90vh', overflowY: 'auto' }}>
+    <div style={{ position: 'fixed', inset: 0, background: t.modalOverlay, display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, padding: 20 }}>
+      <div style={{ background: t.modalBg, borderRadius: 14, border: `0.5px solid ${t.cardBorder}`, width: '100%', maxWidth: 500, boxShadow: '0 4px 24px rgba(0,0,0,0.08)', maxHeight: '90vh', overflowY: 'auto' }}>
 
         {/* Header */}
-        <div style={{ padding: '18px 20px 14px', borderBottom: '0.5px solid rgba(0,0,0,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ fontSize: 15, fontWeight: 500, color: '#111827' }}>{isEdit ? 'Edit schedule' : 'Create investment schedule'}</div>
-          <button onClick={onClose} style={{ width: 26, height: 26, borderRadius: '50%', border: 'none', background: '#F3F4F6', cursor: 'pointer', fontSize: 13, color: '#6B7280', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
+        <div style={{ padding: '18px 20px 14px', borderBottom: `0.5px solid ${t.cardBorder}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ fontSize: 15, fontWeight: 500, color: t.textPrimary }}>{isEdit ? 'Edit schedule' : 'Create investment schedule'}</div>
+          <button onClick={onClose} style={{ width: 26, height: 26, borderRadius: '50%', border: 'none', background: t.toggleBg, cursor: 'pointer', fontSize: 13, color: t.textMuted, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
         </div>
 
         {/* Body */}
@@ -221,7 +221,7 @@ export default function CreateScheduleDialog({ accounts, onClose, onSaved, editS
 
           {/* Name */}
           <div>
-            <label style={label}>Schedule name</label>
+            <label style={labelStyle}>Schedule name</label>
             <input
               style={inp}
               value={name}
@@ -233,7 +233,7 @@ export default function CreateScheduleDialog({ accounts, onClose, onSaved, editS
 
           {/* Account */}
           <div>
-            <label style={label}>Account</label>
+            <label style={labelStyle}>Account</label>
             <select style={{ ...inp, appearance: 'none', backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%236B7280'/%3E%3C/svg%3E\")", backgroundRepeat: 'no-repeat', backgroundPosition: 'right 10px center', paddingRight: 28 }}
               value={accountId} onChange={(e) => setAccountId(e.target.value)}>
               <option value="">Select an account...</option>
@@ -247,10 +247,10 @@ export default function CreateScheduleDialog({ accounts, onClose, onSaved, editS
 
           {/* ETF Allocations */}
           <div>
-            <label style={label}>ETF / Stock allocations</label>
+            <label style={labelStyle}>ETF / Stock allocations</label>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 8 }}>
               {rows.map(row => (
-                <AllocationRow key={row.id} row={row}
+                <AllocationRow key={row.id} row={row} inp={inp}
                   onSymbol={(v) => updateRow(row.id, 'symbol', v)}
                   onPct={(v) => updateRow(row.id, 'pct', v)}
                   onDelete={() => deleteRow(row.id)}
@@ -260,19 +260,19 @@ export default function CreateScheduleDialog({ accounts, onClose, onSaved, editS
             </div>
             <button onClick={addRow} style={{ fontSize: 12, color: '#2563eb', cursor: 'pointer', background: 'none', border: 'none', padding: '2px 0', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 4 }}>+ Add ETF or stock</button>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 }}>
-              <span style={{ fontSize: 12, fontWeight: 500, color: total === 100 ? '#16A34A' : total > 100 ? '#DC2626' : '#9CA3AF' }}>
+              <span style={{ fontSize: 12, fontWeight: 500, color: total === 100 ? '#16A34A' : total > 100 ? '#DC2626' : t.textFaint }}>
                 Total: {total}%{total > 100 ? ` (over by ${total - 100}%)` : ''}
               </span>
-              {remaining > 0 && total < 100 && <span style={{ fontSize: 11, color: '#9CA3AF' }}>{remaining}% unallocated</span>}
+              {remaining > 0 && total < 100 && <span style={{ fontSize: 11, color: t.textFaint }}>{remaining}% unallocated</span>}
             </div>
-            <div style={{ height: 3, borderRadius: 2, background: '#E5E7EB', marginTop: 6, overflow: 'hidden' }}>
+            <div style={{ height: 3, borderRadius: 2, background: t.toggleBg, marginTop: 6, overflow: 'hidden' }}>
               <div style={{ height: '100%', borderRadius: 2, width: `${Math.min(total, 100)}%`, background: total === 100 ? '#16A34A' : total > 100 ? '#EF4444' : '#2563eb', transition: 'width 0.2s, background 0.2s' }} />
             </div>
           </div>
 
           {/* Repeat */}
           <div>
-            <label style={label}>Repeat</label>
+            <label style={labelStyle}>Repeat</label>
             <div style={{ display: 'flex', gap: 8 }}>
               {['weekly', 'biweekly', 'monthly'].map(f => (
                 <button key={f} style={tabBtn(frequency === f)} onClick={() => setFrequency(f)}>
@@ -283,7 +283,7 @@ export default function CreateScheduleDialog({ accounts, onClose, onSaved, editS
 
             {frequency === 'weekly' && (
               <div style={{ marginTop: 10 }}>
-                <div style={{ fontSize: 11, color: '#6B7280', marginBottom: 6 }}>Pick a day of the week</div>
+                <div style={{ fontSize: 11, color: t.textMuted, marginBottom: 6 }}>Pick a day of the week</div>
                 <div style={{ display: 'flex', gap: 6 }}>
                   {DAYS.map((d, i) => (
                     <button key={d} style={dayBtn(dayOfWeek === i)} onClick={() => setDayOfWeek(i)}>{d}</button>
@@ -298,16 +298,16 @@ export default function CreateScheduleDialog({ accounts, onClose, onSaved, editS
                   { key: 'biweekly_1_15', label: '1st & 15th', sub: 'Every month' },
                   { key: 'biweekly_alternating', label: `Every other ${DAYS[dayOfWeek]}`, sub: 'Alternating weeks' },
                 ].map(opt => (
-                  <div key={opt.key} onClick={() => setBiweeklyType(opt.key)} style={{ flex: 1, padding: 10, border: `1px solid ${biweeklyType === opt.key ? '#2563eb' : '#D1D5DB'}`, borderRadius: 8, cursor: 'pointer', background: biweeklyType === opt.key ? '#EFF6FF' : '#fff' }}>
-                    <div style={{ fontSize: 12, fontWeight: 500, color: '#111827' }}>{opt.label}</div>
-                    <div style={{ fontSize: 10, color: '#9CA3AF', marginTop: 2 }}>{opt.sub}</div>
+                  <div key={opt.key} onClick={() => setBiweeklyType(opt.key)} style={{ flex: 1, padding: 10, border: `1px solid ${biweeklyType === opt.key ? '#2563eb' : t.inputBorderLight}`, borderRadius: 8, cursor: 'pointer', background: biweeklyType === opt.key ? '#EFF6FF' : t.cardBg }}>
+                    <div style={{ fontSize: 12, fontWeight: 500, color: t.textPrimary }}>{opt.label}</div>
+                    <div style={{ fontSize: 10, color: t.textFaint, marginTop: 2 }}>{opt.sub}</div>
                   </div>
                 ))}
               </div>
             )}
             {frequency === 'biweekly' && biweeklyType === 'biweekly_alternating' && (
               <div style={{ marginTop: 10 }}>
-                <div style={{ fontSize: 11, color: '#6B7280', marginBottom: 6 }}>Pick a day of the week</div>
+                <div style={{ fontSize: 11, color: t.textMuted, marginBottom: 6 }}>Pick a day of the week</div>
                 <div style={{ display: 'flex', gap: 6 }}>
                   {DAYS.map((d, i) => (
                     <button key={d} style={dayBtn(dayOfWeek === i)} onClick={() => setDayOfWeek(i)}>{d}</button>
@@ -318,10 +318,10 @@ export default function CreateScheduleDialog({ accounts, onClose, onSaved, editS
 
             {frequency === 'monthly' && (
               <div style={{ marginTop: 10 }}>
-                <div style={{ fontSize: 11, color: '#6B7280', marginBottom: 6 }}>Pick a day of the month</div>
+                <div style={{ fontSize: 11, color: t.textMuted, marginBottom: 6 }}>Pick a day of the month</div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 3 }}>
                   {['Su','Mo','Tu','We','Th','Fr','Sa'].map(h => (
-                    <div key={h} style={{ fontSize: 10, fontWeight: 600, color: '#6B7280', textAlign: 'center', padding: '4px 0 6px' }}>{h}</div>
+                    <div key={h} style={{ fontSize: 10, fontWeight: 600, color: t.textMuted, textAlign: 'center', padding: '4px 0 6px' }}>{h}</div>
                   ))}
                   {(() => {
                     const now = new Date();
@@ -334,15 +334,15 @@ export default function CreateScheduleDialog({ accounts, onClose, onSaved, editS
                       const sel = dayOfMonth === n;
                       cells.push(
                         <button key={n} onClick={() => setDayOfMonth(n)} style={{
-                          width: '100%', height: 32, border: `1px solid ${sel ? '#2563eb' : '#D1D5DB'}`,
-                          borderRadius: 6, background: sel ? '#2563eb' : '#fff',
+                          width: '100%', height: 32, border: `1px solid ${sel ? '#2563eb' : t.inputBorderLight}`,
+                          borderRadius: 6, background: sel ? '#2563eb' : t.cardBg,
                           fontSize: 12, fontWeight: 500, cursor: 'pointer',
-                          color: sel ? '#fff' : '#374151', fontFamily: 'inherit',
+                          color: sel ? '#fff' : t.textSecondary, fontFamily: 'inherit',
                           display: 'flex', alignItems: 'center', justifyContent: 'center',
                           transition: 'all 0.12s', minWidth: 0,
                         }}
                         onMouseEnter={e => { if (!sel) { e.currentTarget.style.borderColor='#2563eb'; e.currentTarget.style.color='#2563eb'; e.currentTarget.style.background='#EFF6FF'; }}}
-                        onMouseLeave={e => { if (!sel) { e.currentTarget.style.borderColor='#D1D5DB'; e.currentTarget.style.color='#374151'; e.currentTarget.style.background='#fff'; }}}
+                        onMouseLeave={e => { if (!sel) { e.currentTarget.style.borderColor=t.inputBorderLight; e.currentTarget.style.color=t.textSecondary; e.currentTarget.style.background=t.cardBg; }}}
                         >{n}</button>
                       );
                     }
@@ -360,10 +360,10 @@ export default function CreateScheduleDialog({ accounts, onClose, onSaved, editS
 
           {/* Time */}
           <div>
-            <label style={label}>Time</label>
+            <label style={labelStyle}>Time</label>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
               <input type="number" min="0" max="23" style={{ ...inp, width: 70, textAlign: 'center' }} value={hour} onChange={(e) => setHour(e.target.value.padStart(2, '0'))} />
-              <span style={{ fontSize: 14, color: '#6B7280' }}>:</span>
+              <span style={{ fontSize: 14, color: t.textMuted }}>:</span>
               <input type="number" min="0" max="59" style={{ ...inp, width: 70, textAlign: 'center' }} value={minute} onChange={(e) => setMinute(e.target.value.padStart(2, '0'))} />
               <select style={{ ...inp, flex: 1, appearance: 'none' }} value={timezone} onChange={(e) => setTimezone(e.target.value)}>
                 {TIMEZONES.map(tz => <option key={tz.value} value={tz.value}>{tz.label}</option>)}
@@ -373,15 +373,15 @@ export default function CreateScheduleDialog({ accounts, onClose, onSaved, editS
         </div>
 
         {/* Footer */}
-        <div style={{ padding: '14px 20px', borderTop: '0.5px solid rgba(0,0,0,0.08)' }}>
+        <div style={{ padding: '14px 20px', borderTop: `0.5px solid ${t.cardBorder}` }}>
           {/* Test Run / Live Invest toggle */}
-          <div style={{ display: 'flex', gap: 0, marginBottom: 12, background: '#F3F4F6', borderRadius: 8, padding: 3 }}>
+          <div style={{ display: 'flex', gap: 0, marginBottom: 12, background: t.toggleBg, borderRadius: 8, padding: 3 }}>
             {[{ label: 'Test Run', val: true }, { label: 'Live Invest', val: false }].map(opt => (
               <button key={String(opt.val)} onClick={() => setIsTest(opt.val)} style={{
                 flex: 1, padding: '7px 0', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 500,
                 cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s',
-                background: isTest === opt.val ? '#fff' : 'transparent',
-                color: isTest === opt.val ? (opt.val ? '#854F0B' : '#1E40AF') : '#6B7280',
+                background: isTest === opt.val ? t.cardBg : 'transparent',
+                color: isTest === opt.val ? (opt.val ? '#854F0B' : '#1E40AF') : t.textMuted,
                 boxShadow: isTest === opt.val ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
               }}>{opt.label}</button>
             ))}

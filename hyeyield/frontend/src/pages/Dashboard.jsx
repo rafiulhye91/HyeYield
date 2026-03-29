@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import api from '../api/client';
 import Layout from '../components/Layout';
 import { useDashboard } from '../context/DashboardContext';
+import { useTheme } from '../context/ThemeContext';
 import CreateScheduleDialog from './CreateScheduleDialog';
 
 // ── helpers ──────────────────────────────────────────────────────────
@@ -100,23 +101,24 @@ function Badge({ connected, enabled }) {
 
 // ── Account card ──────────────────────────────────────────────────────
 function AccountCard({ b, onReconnect, balancesLoading, hidden }) {
+  const { t } = useTheme();
   const hasData   = b.connected && b.enabled && b.total_value != null;
   const lastRun   = fmtDate(b.last_run);
   const dim = (val) => balancesLoading && !hasData
-    ? <span style={{ color: '#D1D5DB' }}>—</span>
+    ? <span style={{ color: t.textFaint }}>—</span>
     : val;
 
   return (
-    <div style={{ background: '#fff', border: '0.5px solid rgba(0,0,0,0.1)', borderRadius: 12, padding: 16 }}>
+    <div style={{ background: t.cardBg, border: `0.5px solid ${t.cardBorder}`, borderRadius: 12, padding: 16 }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 12, gap: 8 }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <div style={{ fontSize: 13, fontWeight: 500, color: '#111827' }}>{b.account_name}</div>
+            <div style={{ fontSize: 13, fontWeight: 500, color: t.textPrimary }}>{b.account_name}</div>
             {b.account_type && b.account_type !== b.account_name && (
               <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 99, background: '#F3F4F6', color: '#6B7280', fontWeight: 500 }}>{b.account_type}</span>
             )}
           </div>
-          <div style={{ fontSize: 10, color: '#9CA3AF', marginTop: 2 }}>
+          <div style={{ fontSize: 10, color: t.textFaint, marginTop: 2 }}>
             {lastThree(b.account_number)}{lastRun ? ` · Last run ${lastRun}` : ''}{!b.enabled ? ' · Paused by you' : ''}
           </div>
         </div>
@@ -125,7 +127,7 @@ function AccountCard({ b, onReconnect, balancesLoading, hidden }) {
       <div style={{ filter: hidden ? 'blur(6px)' : 'none', userSelect: hidden ? 'none' : 'auto', transition: 'filter 0.2s ease', pointerEvents: hidden ? 'none' : 'auto' }}>
         {(!b.connected || !b.enabled) && !hasData ? (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '20px 0', gap: 8 }}>
-            <div style={{ fontSize: 11, color: '#9CA3AF', textAlign: 'center' }}>
+            <div style={{ fontSize: 11, color: t.textFaint, textAlign: 'center' }}>
               {!b.connected ? 'Balances unavailable.\nReconnect to resume investing.' : 'Invest runs paused for this account.'}
             </div>
             {!b.connected && (
@@ -137,20 +139,20 @@ function AccountCard({ b, onReconnect, balancesLoading, hidden }) {
         ) : (
           <>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-              <span style={{ fontSize: 11, color: '#9CA3AF' }}>Total value</span>
-              <span style={{ fontSize: 11, fontWeight: 500, color: '#111827' }}>{dim(fmt(b.total_value))}</span>
+              <span style={{ fontSize: 11, color: t.textFaint }}>Total value</span>
+              <span style={{ fontSize: 11, fontWeight: 500, color: t.textPrimary }}>{dim(fmt(b.total_value))}</span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-              <span style={{ fontSize: 11, color: '#9CA3AF' }}>Cash available</span>
-              <span style={{ fontSize: 11, fontWeight: 500, color: b.cash > 0 ? '#166534' : '#111827' }}>{dim(fmt(b.cash))}</span>
+              <span style={{ fontSize: 11, color: t.textFaint }}>Cash available</span>
+              <span style={{ fontSize: 11, fontWeight: 500, color: b.cash > 0 ? '#166534' : t.textPrimary }}>{dim(fmt(b.cash))}</span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-              <span style={{ fontSize: 11, color: '#9CA3AF' }}>Invested</span>
-              <span style={{ fontSize: 11, fontWeight: 500, color: '#111827' }}>{dim(fmt(b.invested))}</span>
+              <span style={{ fontSize: 11, color: t.textFaint }}>Invested</span>
+              <span style={{ fontSize: 11, fontWeight: 500, color: t.textPrimary }}>{dim(fmt(b.invested))}</span>
             </div>
-            <hr style={{ border: 'none', borderTop: '0.5px solid rgba(0,0,0,0.07)', margin: '10px 0' }} />
-            <div style={{ fontSize: 22, fontWeight: 500, color: b.enabled ? '#111827' : '#9CA3AF' }}>{dim(fmtShort(b.total_value))}</div>
-            <div style={{ fontSize: 10, color: '#9CA3AF', marginTop: 2 }}>{b.enabled ? 'total portfolio value' : 'invest runs paused'}</div>
+            <hr style={{ border: 'none', borderTop: `0.5px solid ${t.hrColor}`, margin: '10px 0' }} />
+            <div style={{ fontSize: 22, fontWeight: 500, color: b.enabled ? t.textPrimary : t.textFaint }}>{dim(fmtShort(b.total_value))}</div>
+            <div style={{ fontSize: 10, color: t.textFaint, marginTop: 2 }}>{b.enabled ? 'total portfolio value' : 'invest runs paused'}</div>
           </>
         )}
       </div>
@@ -220,6 +222,7 @@ function HeroCard({ s, balance, onToggle, onDelete, onEdit, toggling }) {
 // ── Schedule timeline row ──────────────────────────────────────────────
 function ScheduleRow({ s, dotColor, onToggle, onDelete, onEdit, toggling }) {
   const [hovered, setHovered] = useState(false);
+  const { t } = useTheme();
   const allocs   = s.allocations || [];
   const nextDate = s.next_run ? fmtDate(s.next_run) : '—';
   const showActions = hovered || !s.enabled;
@@ -227,7 +230,7 @@ function ScheduleRow({ s, dotColor, onToggle, onDelete, onEdit, toggling }) {
   const taBtn = (onClick, children, title, colorClass, disabled = false) => (
     <button onClick={onClick} disabled={disabled} title={title} style={{
       width: 24, height: 24, border: `0.5px solid ${colorClass}`, borderRadius: 6,
-      background: '#fff', cursor: disabled ? 'default' : 'pointer',
+      background: t.cardBg, cursor: disabled ? 'default' : 'pointer',
       display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, flexShrink: 0,
     }}>{children}</button>
   );
@@ -236,16 +239,16 @@ function ScheduleRow({ s, dotColor, onToggle, onDelete, onEdit, toggling }) {
     <div
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
-      style={{ padding: '11px 16px', borderBottom: '0.5px solid #F3F4F6', display: 'flex', alignItems: 'center', gap: 10, background: hovered ? '#FAFBFC' : '#fff', transition: 'background 0.12s' }}
+      style={{ padding: '11px 16px', borderBottom: `0.5px solid ${t.tableRowBorder}`, display: 'flex', alignItems: 'center', gap: 10, background: hovered ? t.tableRowHover : t.cardBg, transition: 'background 0.12s' }}
     >
       <div style={{ width: 8, height: 8, borderRadius: '50%', flexShrink: 0, marginTop: 2, background: s.enabled ? dotColor : '#9CA3AF' }} />
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 12, fontWeight: 500, color: s.enabled ? '#111827' : '#9CA3AF' }}>
+        <div style={{ fontSize: 12, fontWeight: 500, color: s.enabled ? t.textPrimary : t.textFaint }}>
           {s.name || `${s.account_name} ${lastThree(s.account_number)}`}
-          {!s.enabled && <span style={{ fontSize: 10, color: '#9CA3AF', fontWeight: 400, marginLeft: 4 }}>Paused</span>}
+          {!s.enabled && <span style={{ fontSize: 10, color: t.textFaint, fontWeight: 400, marginLeft: 4 }}>Paused</span>}
           {s.is_test && <span style={{ fontSize: 10, padding: '1px 5px', borderRadius: 99, background: '#FEF9C3', color: '#854F0B', fontWeight: 500, marginLeft: 5 }}>Test</span>}
         </div>
-        <div style={{ fontSize: 11, color: '#9CA3AF', marginTop: 1 }}>{freqLabel(s)}</div>
+        <div style={{ fontSize: 11, color: t.textFaint, marginTop: 1 }}>{freqLabel(s)}</div>
         <div style={{ display: 'flex', gap: 3, marginTop: 4, flexWrap: 'wrap' }}>
           {allocs.map((a, idx) => (
             <span key={a.symbol} style={{ fontSize: 10, padding: '2px 7px', borderRadius: 99, fontWeight: 500, background: PILL_COLORS[idx % PILL_COLORS.length].bg, color: PILL_COLORS[idx % PILL_COLORS.length].color }}>
@@ -255,8 +258,8 @@ function ScheduleRow({ s, dotColor, onToggle, onDelete, onEdit, toggling }) {
         </div>
       </div>
       <div style={{ textAlign: 'right', flexShrink: 0, marginRight: 8 }}>
-        <div style={{ fontSize: 11, fontWeight: 500, color: s.enabled ? '#374151' : '#9CA3AF' }}>{nextDate}</div>
-        <div style={{ fontSize: 10, color: '#9CA3AF', marginTop: 1 }}>{schedTime(s)}</div>
+        <div style={{ fontSize: 11, fontWeight: 500, color: s.enabled ? t.textSecondary : t.textFaint }}>{nextDate}</div>
+        <div style={{ fontSize: 10, color: t.textFaint, marginTop: 1 }}>{schedTime(s)}</div>
       </div>
       <div style={{ display: 'flex', gap: 3, opacity: showActions ? 1 : 0, transition: 'opacity 0.15s', flexShrink: 0 }}>
         {s.enabled
@@ -273,6 +276,7 @@ function ScheduleRow({ s, dotColor, onToggle, onDelete, onEdit, toggling }) {
 // ── Main page ─────────────────────────────────────────────────────────
 export default function Dashboard() {
   const navigate = useNavigate();
+  const { t } = useTheme();
   const { balances, schedules, history, loading, balancesLoading, syncing, sync, addSchedule, updateSchedule, removeSchedule } = useDashboard();
   const [hidden, setHidden]           = useState(true);
   const [showDialog, setShowDialog]   = useState(false);
@@ -316,10 +320,10 @@ export default function Dashboard() {
   };
 
   const sectionLabel = (text) => (
-    <span style={{ fontSize: 11, fontWeight: 600, color: '#9CA3AF', letterSpacing: '0.08em', textTransform: 'uppercase' }}>{text}</span>
+    <span style={{ fontSize: 11, fontWeight: 600, color: t.textFaint, letterSpacing: '0.08em', textTransform: 'uppercase' }}>{text}</span>
   );
 
-  if (loading) return <Layout><p style={{ padding: 20, fontSize: 13, color: '#6B7280' }}>Loading…</p></Layout>;
+  if (loading) return <Layout><p style={{ padding: 20, fontSize: 13, color: t.textMuted }}>Loading…</p></Layout>;
 
   return (
     <Layout>
@@ -345,12 +349,12 @@ export default function Dashboard() {
 
         {schedules.length === 0 ? (
           /* Empty state */
-          <div style={{ background: '#fff', borderRadius: 14, border: '0.5px solid rgba(0,0,0,0.07)', overflow: 'hidden', marginBottom: 28 }}>
+          <div style={{ background: t.cardBg, borderRadius: 14, border: `0.5px solid ${t.cardBorder}`, overflow: 'hidden', marginBottom: 28 }}>
             <div onClick={() => setShowDialog(true)} style={{ padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}
-              onMouseEnter={e => e.currentTarget.style.background = '#F8F9FF'}
+              onMouseEnter={e => e.currentTarget.style.background = t.tableRowHover}
               onMouseLeave={e => e.currentTarget.style.background = ''}>
-              <div style={{ width: 24, height: 24, borderRadius: 6, border: '1.5px dashed #D1D5DB', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9CA3AF', fontSize: 14, flexShrink: 0 }}>+</div>
-              <span style={{ fontSize: 12, color: '#9CA3AF' }}>Add new schedule</span>
+              <div style={{ width: 24, height: 24, borderRadius: 6, border: `1.5px dashed ${t.inputBorderLight}`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: t.textFaint, fontSize: 14, flexShrink: 0 }}>+</div>
+              <span style={{ fontSize: 12, color: t.textFaint }}>Add new schedule</span>
             </div>
           </div>
         ) : (
@@ -362,15 +366,15 @@ export default function Dashboard() {
             <div style={{ height: 16 }} />
 
             {/* Timeline list — all schedules */}
-            <div style={{ background: '#fff', borderRadius: 14, border: '0.5px solid rgba(0,0,0,0.07)', overflow: 'hidden', marginBottom: 28 }}>
+            <div style={{ background: t.cardBg, borderRadius: 14, border: `0.5px solid ${t.cardBorder}`, overflow: 'hidden', marginBottom: 28 }}>
               {sorted.map(s => (
                 <ScheduleRow key={s.id} s={s} dotColor={dotColorOf[s.id]} onToggle={handleToggle} onDelete={handleDelete} onEdit={openEdit} toggling={toggling} />
               ))}
-              <div onClick={() => setShowDialog(true)} style={{ padding: '11px 16px', display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', borderTop: '0.5px solid #F3F4F6' }}
-                onMouseEnter={e => e.currentTarget.style.background = '#F8F9FF'}
+              <div onClick={() => setShowDialog(true)} style={{ padding: '11px 16px', display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', borderTop: `0.5px solid ${t.tableRowBorder}` }}
+                onMouseEnter={e => e.currentTarget.style.background = t.tableRowHover}
                 onMouseLeave={e => e.currentTarget.style.background = ''}>
-                <div style={{ width: 24, height: 24, borderRadius: 6, border: '1.5px dashed #D1D5DB', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9CA3AF', fontSize: 14, flexShrink: 0 }}>+</div>
-                <span style={{ fontSize: 12, color: '#9CA3AF' }}>Add new schedule</span>
+                <div style={{ width: 24, height: 24, borderRadius: 6, border: `1.5px dashed ${t.inputBorderLight}`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: t.textFaint, fontSize: 14, flexShrink: 0 }}>+</div>
+                <span style={{ fontSize: 12, color: t.textFaint }}>Add new schedule</span>
               </div>
             </div>
           </>
@@ -396,16 +400,15 @@ export default function Dashboard() {
             .sort((a, b) => new Date(b.date) - new Date(a.date))
             .slice(0, 10);
           if (!runs.length) return null;
-          // each row ~44px tall, show 5 rows
           return (
             <>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
                 {sectionLabel('Recent Invest Runs')}
-                <button onClick={() => navigate('/history')} style={{ padding: '4px 12px', background: '#fff', border: '0.5px solid rgba(0,0,0,0.15)', borderRadius: 6, fontSize: 11, cursor: 'pointer', color: '#6B7280', fontFamily: 'inherit' }}>
+                <button onClick={() => navigate('/history')} style={{ padding: '4px 12px', background: t.cardBg, border: `0.5px solid ${t.cardBorder}`, borderRadius: 6, fontSize: 11, cursor: 'pointer', color: t.textMuted, fontFamily: 'inherit' }}>
                   View all
                 </button>
               </div>
-              <div style={{ background: '#fff', borderRadius: 14, border: '0.5px solid rgba(0,0,0,0.07)', overflow: 'hidden', marginBottom: 28 }}>
+              <div style={{ background: t.cardBg, borderRadius: 14, border: `0.5px solid ${t.cardBorder}`, overflow: 'hidden', marginBottom: 28 }}>
                 <div style={{ maxHeight: 220, overflowY: 'auto' }}>
                   {runs.map(run => {
                     const st = run.anyFailed ? 'failed' : run.anyPartial ? 'partial' : 'ok';
@@ -413,17 +416,17 @@ export default function Dashboard() {
                     const badge = { ok: { bg: '#DCFCE7', color: '#166534', lbl: run.isDryRun ? 'Test' : 'Filled' }, partial: { bg: '#FEF9C3', color: '#854F0B', lbl: 'Partial' }, failed: { bg: '#FEE2E2', color: '#991B1B', lbl: 'Failed' } }[st];
                     const orderSummary = run.orders.map(o => `${o.symbol}${o.shares ? ` ×${Math.round(o.shares)}` : ''}`).join(' · ');
                     return (
-                      <div key={run.key} style={{ padding: '10px 16px', borderBottom: '0.5px solid #F3F4F6', display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <div key={run.key} style={{ padding: '10px 16px', borderBottom: `0.5px solid ${t.tableRowBorder}`, display: 'flex', alignItems: 'center', gap: 10 }}>
                         <div style={{ width: 24, height: 24, borderRadius: 7, background: icon.bg, color: icon.color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, flexShrink: 0 }}>{icon.ch}</div>
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: 12, fontWeight: 500, color: '#111827' }}>{run.scheduleName || `${run.accountName} ${lastThree(run.accountNumber)}`}</div>
-                          <div style={{ fontSize: 11, color: '#9CA3AF', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          <div style={{ fontSize: 12, fontWeight: 500, color: t.textPrimary }}>{run.scheduleName || `${run.accountName} ${lastThree(run.accountNumber)}`}</div>
+                          <div style={{ fontSize: 11, color: t.textFaint, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                             {run.scheduleName ? `${run.accountName} ${lastThree(run.accountNumber)} · ` : ''}{orderSummary}
                           </div>
                         </div>
                         <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                          <div style={{ fontSize: 12, fontWeight: 500, color: '#111827' }}>{run.total > 0 ? fmt(run.total) : '—'}</div>
-                          <div style={{ fontSize: 10, color: '#9CA3AF', marginTop: 1 }}>{fmtCST(run.date)}</div>
+                          <div style={{ fontSize: 12, fontWeight: 500, color: t.textPrimary }}>{run.total > 0 ? fmt(run.total) : '—'}</div>
+                          <div style={{ fontSize: 10, color: t.textFaint, marginTop: 1 }}>{fmtCST(run.date)}</div>
                           <span style={{ fontSize: 10, padding: '2px 6px', borderRadius: 99, fontWeight: 500, display: 'inline-block', marginTop: 2, background: badge.bg, color: badge.color }}>{badge.lbl}</span>
                         </div>
                       </div>
@@ -439,17 +442,17 @@ export default function Dashboard() {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             {sectionLabel('Account Balances')}
-            <button onClick={() => setHidden(h => !h)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF', padding: 0, display: 'flex', alignItems: 'center' }}>
+            <button onClick={() => setHidden(h => !h)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: t.textFaint, padding: 0, display: 'flex', alignItems: 'center' }}>
               {hidden ? <EyeOff /> : <EyeOpen />}
             </button>
           </div>
-          <button onClick={sync} disabled={syncing} style={{ padding: '4px 12px', background: '#fff', border: '0.5px solid rgba(0,0,0,0.15)', borderRadius: 6, fontSize: 11, cursor: 'pointer', color: '#6B7280', fontFamily: 'inherit' }}>
+          <button onClick={sync} disabled={syncing} style={{ padding: '4px 12px', background: t.cardBg, border: `0.5px solid ${t.cardBorder}`, borderRadius: 6, fontSize: 11, cursor: 'pointer', color: t.textMuted, fontFamily: 'inherit' }}>
             {syncing ? 'Syncing…' : 'Sync accounts'}
           </button>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 12, marginBottom: 22 }}>
           {balances.length === 0
-            ? <p style={{ fontSize: 13, color: '#9CA3AF' }}>No accounts yet. Connect Schwab in Settings.</p>
+            ? <p style={{ fontSize: 13, color: t.textFaint }}>No accounts yet. Connect Schwab in Settings.</p>
             : balances.map(b => <AccountCard key={b.account_id} b={b} onReconnect={() => navigate('/settings')} balancesLoading={balancesLoading} hidden={hidden} />)
           }
         </div>
