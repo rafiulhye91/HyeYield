@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
 import api from '../api/client';
+import { useTheme } from '../context/ThemeContext';
 
 const CRON_LABELS = {
   '35 9 1,15 * *': 'Every month on the 1st and 15th at 9:35 AM',
@@ -29,23 +30,9 @@ function Toast({ msg, error }) {
   );
 }
 
-const s = {
-  section: { background: '#fff', border: '0.5px solid rgba(0,0,0,0.12)', borderRadius: 12, padding: '18px 20px', marginBottom: 14 },
-  title: { fontSize: 14, fontWeight: 500, color: '#111827', marginBottom: 4 },
-  desc: { fontSize: 12, color: '#6B7280', marginBottom: 16, lineHeight: 1.5 },
-  row: { display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 },
-  label: { fontSize: 12, color: '#4B5563', width: 130, flexShrink: 0 },
-  input: { flex: 1, padding: '7px 10px', border: '0.5px solid rgba(0,0,0,0.2)', borderRadius: 8, fontSize: 12, background: '#fff', color: '#111827', fontFamily: 'inherit' },
-  btnPrimary: { padding: '7px 14px', background: '#2563eb', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 500, cursor: 'pointer', whiteSpace: 'nowrap', fontFamily: 'inherit' },
-  btnSecondary: { padding: '7px 12px', border: '0.5px solid rgba(0,0,0,0.2)', background: 'none', borderRadius: 8, fontSize: 12, cursor: 'pointer', color: '#4B5563', whiteSpace: 'nowrap', fontFamily: 'inherit' },
-  btnDanger: { padding: '7px 14px', background: '#dc2626', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit' },
-  infoRow: { display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 },
-  infoLabel: { fontSize: 12, color: '#6B7280', width: 130, flexShrink: 0 },
-  infoVal: { fontSize: 12, color: '#111827' },
-};
-
 export default function Settings() {
   const navigate = useNavigate();
+  const { t } = useTheme();
 
   const [ntfyTopic, setNtfyTopic] = useState('');
   const [appKey, setAppKey] = useState('');
@@ -143,12 +130,27 @@ export default function Settings() {
     }
   };
 
-  if (loading) return <Layout><p style={{ padding: 20, fontSize: 13, color: '#6B7280' }}>Loading…</p></Layout>;
+  const s = {
+    section: { background: t.cardBg, border: `0.5px solid ${t.sectionBorder}`, borderRadius: 12, padding: '18px 20px', marginBottom: 14 },
+    title: { fontSize: 14, fontWeight: 500, color: t.textPrimary, marginBottom: 4 },
+    desc: { fontSize: 12, color: t.textMuted, marginBottom: 16, lineHeight: 1.5 },
+    row: { display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 },
+    label: { fontSize: 12, color: t.textSecondary, width: 130, flexShrink: 0 },
+    input: { flex: 1, padding: '7px 10px', border: `0.5px solid ${t.inputBorder}`, borderRadius: 8, fontSize: 12, background: t.inputBg, color: t.textPrimary, fontFamily: 'inherit' },
+    btnPrimary: { padding: '7px 14px', background: '#2563eb', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 500, cursor: 'pointer', whiteSpace: 'nowrap', fontFamily: 'inherit' },
+    btnSecondary: { padding: '7px 12px', border: `0.5px solid ${t.inputBorder}`, background: 'none', borderRadius: 8, fontSize: 12, cursor: 'pointer', color: t.textSecondary, whiteSpace: 'nowrap', fontFamily: 'inherit' },
+    btnDanger: { padding: '7px 14px', background: '#dc2626', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit' },
+    infoRow: { display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 },
+    infoLabel: { fontSize: 12, color: t.textMuted, width: 130, flexShrink: 0 },
+    infoVal: { fontSize: 12, color: t.textPrimary },
+  };
+
+  if (loading) return <Layout><p style={{ padding: 20, fontSize: 13, color: t.textMuted }}>Loading…</p></Layout>;
 
   return (
     <Layout>
       <div style={{ maxWidth: 720, margin: '0 auto', padding: '28px 20px', fontFamily: 'system-ui, -apple-system, sans-serif' }}>
-        <div style={{ fontSize: 18, fontWeight: 500, color: '#111827', marginBottom: 20 }}>Settings</div>
+        <div style={{ fontSize: 18, fontWeight: 500, color: t.textPrimary, marginBottom: 20 }}>Settings</div>
 
         {/* Push Notifications */}
         <div style={s.section}>
@@ -191,11 +193,11 @@ export default function Settings() {
           <form onSubmit={changePassword}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
               <div>
-                <div style={{ fontSize: 11, color: '#6B7280', marginBottom: 4 }}>Current password</div>
+                <div style={{ fontSize: 11, color: t.textMuted, marginBottom: 4 }}>Current password</div>
                 <input type="password" style={{ ...s.input, flex: 'unset', width: '100%' }} value={currentPw} onChange={(e) => setCurrentPw(e.target.value)} placeholder="••••••••" required />
               </div>
               <div>
-                <div style={{ fontSize: 11, color: '#6B7280', marginBottom: 4 }}>New password (8+ characters)</div>
+                <div style={{ fontSize: 11, color: t.textMuted, marginBottom: 4 }}>New password (8+ characters)</div>
                 <input type="password" style={{ ...s.input, flex: 'unset', width: '100%' }} value={newPw} onChange={(e) => setNewPw(e.target.value)} placeholder="••••••••" required minLength={8} />
               </div>
             </div>
@@ -212,7 +214,7 @@ export default function Settings() {
           <div style={s.infoRow}><div style={s.infoLabel}>Email</div><div style={s.infoVal}>{profile?.email}</div></div>
           <div style={s.infoRow}>
             <div style={s.infoLabel}>Member since</div>
-            <div style={{ ...s.infoVal, color: '#6B7280' }}>{profile?.created_at ? new Date(profile.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : '—'}</div>
+            <div style={{ ...s.infoVal, color: t.textMuted }}>{profile?.created_at ? new Date(profile.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : '—'}</div>
           </div>
           <div style={s.infoRow}>
             <div style={s.infoLabel}>Schwab accounts</div>
@@ -221,9 +223,9 @@ export default function Settings() {
         </div>
 
         {/* Danger Zone */}
-        <div style={{ background: '#fff', border: '0.5px solid #F09595', borderRadius: 12, padding: '18px 20px', marginBottom: 14 }}>
+        <div style={{ background: t.cardBg, border: '0.5px solid #F09595', borderRadius: 12, padding: '18px 20px', marginBottom: 14 }}>
           <div style={{ fontSize: 14, fontWeight: 500, color: '#A32D2D', marginBottom: 4 }}>Danger zone</div>
-          <div style={{ fontSize: 12, color: '#6B7280', marginBottom: 14, lineHeight: 1.5 }}>
+          <div style={{ fontSize: 12, color: t.textMuted, marginBottom: 14, lineHeight: 1.5 }}>
             Permanently deletes your account, all connected Schwab accounts, all ETF allocations, and all trade history. This action cannot be undone.
           </div>
           <button type="button" onClick={deleteAccount} style={s.btnDanger}>Delete my account</button>

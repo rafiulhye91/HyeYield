@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
 import api from '../api/client';
 
 const fadeIn = `
@@ -19,74 +20,9 @@ const FEATURES = [
   'Dry-run mode to preview orders before placing',
 ];
 
-const css = {
-  body: {
-    fontFamily: 'system-ui, -apple-system, sans-serif',
-    background: '#F9FAFB',
-    minHeight: '100vh',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 20,
-    color: '#111827',
-  },
-  container: {
-    display: 'flex',
-    width: '100%',
-    maxWidth: 640,
-    borderRadius: 12,
-    overflow: 'hidden',
-    boxShadow: '0 1px 4px rgba(0,0,0,0.1)',
-    transition: 'height 0.3s ease',
-  },
-  left: {
-    width: 240,
-    flexShrink: 0,
-    background: '#1e3a5f',
-    padding: '32px 24px',
-    display: 'flex',
-    flexDirection: 'column',
-    minHeight: 580,
-  },
-  right: {
-    flex: 1,
-    background: '#fff',
-    border: '0.5px solid rgba(0,0,0,0.1)',
-    borderLeft: 'none',
-    padding: '32px 28px',
-    display: 'flex',
-    flexDirection: 'column',
-    overflowY: 'auto',
-    transition: 'all 0.3s ease',
-  },
-  input: {
-    width: '100%',
-    padding: '8px 10px',
-    border: '0.5px solid rgba(0,0,0,0.2)',
-    borderRadius: 8,
-    fontSize: 13,
-    background: '#fff',
-    color: '#111827',
-    fontFamily: 'inherit',
-    boxSizing: 'border-box',
-  },
-  btnPrimary: {
-    width: '100%',
-    padding: 9,
-    background: '#2563eb',
-    color: '#fff',
-    border: 'none',
-    borderRadius: 8,
-    fontSize: 13,
-    fontWeight: 500,
-    cursor: 'pointer',
-    marginTop: 4,
-    fontFamily: 'inherit',
-  },
-};
-
 export default function AuthPage({ initialTab = 'login' }) {
   const { login } = useAuth();
+  const { t } = useTheme();
   const navigate = useNavigate();
   const [tab, setTab] = useState(initialTab);
 
@@ -157,18 +93,83 @@ export default function AuthPage({ initialTab = 'login' }) {
     }
   };
 
-  const tabStyle = (t) => ({
+  const css = {
+    body: {
+      fontFamily: 'system-ui, -apple-system, sans-serif',
+      background: t.pageBg,
+      minHeight: '100vh',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: 20,
+      color: t.textPrimary,
+    },
+    container: {
+      display: 'flex',
+      width: '100%',
+      maxWidth: 640,
+      borderRadius: 12,
+      overflow: 'hidden',
+      boxShadow: '0 1px 4px rgba(0,0,0,0.1)',
+      transition: 'height 0.3s ease',
+    },
+    left: {
+      width: 240,
+      flexShrink: 0,
+      background: '#1e3a5f',
+      padding: '32px 24px',
+      display: 'flex',
+      flexDirection: 'column',
+      minHeight: 580,
+    },
+    right: {
+      flex: 1,
+      background: t.cardBg,
+      border: `0.5px solid ${t.cardBorder}`,
+      borderLeft: 'none',
+      padding: '32px 28px',
+      display: 'flex',
+      flexDirection: 'column',
+      overflowY: 'auto',
+      transition: 'all 0.3s ease',
+    },
+    input: {
+      width: '100%',
+      padding: '8px 10px',
+      border: `0.5px solid ${t.inputBorder}`,
+      borderRadius: 8,
+      fontSize: 13,
+      background: t.inputBg,
+      color: t.textPrimary,
+      fontFamily: 'inherit',
+      boxSizing: 'border-box',
+    },
+    btnPrimary: {
+      width: '100%',
+      padding: 9,
+      background: '#2563eb',
+      color: '#fff',
+      border: 'none',
+      borderRadius: 8,
+      fontSize: 13,
+      fontWeight: 500,
+      cursor: 'pointer',
+      marginTop: 4,
+      fontFamily: 'inherit',
+    },
+  };
+
+  const tabStyle = (tabName) => ({
     padding: '8px 16px',
     fontSize: 13,
     cursor: 'pointer',
-    color: tab === t ? '#185FA5' : '#6B7280',
-    borderBottom: tab === t ? '2px solid #2563eb' : '2px solid transparent',
-    fontWeight: tab === t ? 500 : 400,
+    color: tab === tabName ? '#185FA5' : t.textMuted,
+    fontWeight: tab === tabName ? 500 : 400,
     marginBottom: -0.5,
     userSelect: 'none',
     background: 'none',
     border: 'none',
-    borderBottom: tab === t ? '2px solid #2563eb' : '2px solid transparent',
+    borderBottom: tab === tabName ? '2px solid #2563eb' : '2px solid transparent',
     fontFamily: 'inherit',
   });
 
@@ -193,7 +194,7 @@ export default function AuthPage({ initialTab = 'login' }) {
 
         {/* Right auth panel */}
         <div style={css.right}>
-          <div style={{ display: 'flex', marginBottom: 24, borderBottom: '0.5px solid rgba(0,0,0,0.1)' }}>
+          <div style={{ display: 'flex', marginBottom: 24, borderBottom: `0.5px solid ${t.cardBorder}` }}>
             <button style={tabStyle('login')} onClick={() => switchTab('login')}>Sign in</button>
             <button style={tabStyle('register')} onClick={() => switchTab('register')}>Create account</button>
           </div>
@@ -207,17 +208,17 @@ export default function AuthPage({ initialTab = 'login' }) {
                 </div>
               )}
               <div style={{ marginBottom: 14 }}>
-                <label style={{ fontSize: 12, color: '#4B5563', marginBottom: 4, display: 'block' }}>Username</label>
+                <label style={{ fontSize: 12, color: t.textSecondary, marginBottom: 4, display: 'block' }}>Username</label>
                 <input style={css.input} value={lUsername} onChange={(e) => setLUsername(e.target.value)} placeholder="your username" autoComplete="username" required />
               </div>
               <div style={{ marginBottom: 14 }}>
-                <label style={{ fontSize: 12, color: '#4B5563', marginBottom: 4, display: 'block' }}>Password</label>
+                <label style={{ fontSize: 12, color: t.textSecondary, marginBottom: 4, display: 'block' }}>Password</label>
                 <input type="password" style={css.input} value={lPassword} onChange={(e) => setLPassword(e.target.value)} placeholder="••••••••" autoComplete="current-password" required />
               </div>
               <button type="submit" style={css.btnPrimary} disabled={lLoading}>
                 {lLoading ? 'Signing in…' : 'Sign in'}
               </button>
-              <div style={{ fontSize: 11, color: '#9CA3AF', marginTop: 14, textAlign: 'center', lineHeight: 1.5 }}>
+              <div style={{ fontSize: 11, color: t.textFaint, marginTop: 14, textAlign: 'center', lineHeight: 1.5 }}>
                 No account?{' '}
                 <span style={{ color: '#2563eb', cursor: 'pointer' }} onClick={() => switchTab('register')}>Create one →</span>
               </div>
@@ -233,20 +234,20 @@ export default function AuthPage({ initialTab = 'login' }) {
                 </div>
               )}
               <div style={{ marginBottom: 14 }}>
-                <label style={{ fontSize: 12, color: '#4B5563', marginBottom: 4, display: 'block' }}>
-                  Username <span style={{ color: '#9CA3AF', fontWeight: 400 }}>(3–30 characters, letters and numbers only)</span>
+                <label style={{ fontSize: 12, color: t.textSecondary, marginBottom: 4, display: 'block' }}>
+                  Username <span style={{ color: t.textFaint, fontWeight: 400 }}>(3–30 characters, letters and numbers only)</span>
                 </label>
                 <input style={css.input} value={rUsername} onChange={(e) => { setRUsername(e.target.value); setRErrors((p) => ({ ...p, username: '' })); }} placeholder="choose a username" autoComplete="username" />
                 {rErrors.username && <div style={{ fontSize: 11, color: '#991B1B', marginTop: 3 }}>{rErrors.username}</div>}
               </div>
               <div style={{ marginBottom: 14 }}>
-                <label style={{ fontSize: 12, color: '#4B5563', marginBottom: 4, display: 'block' }}>Email</label>
+                <label style={{ fontSize: 12, color: t.textSecondary, marginBottom: 4, display: 'block' }}>Email</label>
                 <input type="email" style={css.input} value={rEmail} onChange={(e) => { setREmail(e.target.value); setRErrors((p) => ({ ...p, email: '' })); }} placeholder="you@example.com" autoComplete="email" />
                 {rErrors.email && <div style={{ fontSize: 11, color: '#991B1B', marginTop: 3 }}>{rErrors.email}</div>}
               </div>
               <div style={{ marginBottom: 14 }}>
-                <label style={{ fontSize: 12, color: '#4B5563', marginBottom: 4, display: 'block' }}>
-                  Password <span style={{ color: '#9CA3AF', fontWeight: 400 }}>(8+ characters)</span>
+                <label style={{ fontSize: 12, color: t.textSecondary, marginBottom: 4, display: 'block' }}>
+                  Password <span style={{ color: t.textFaint, fontWeight: 400 }}>(8+ characters)</span>
                 </label>
                 <input type="password" style={css.input} value={rPassword} onChange={(e) => { setRPassword(e.target.value); setRErrors((p) => ({ ...p, password: '' })); }} placeholder="••••••••" autoComplete="new-password" />
                 {rErrors.password && <div style={{ fontSize: 11, color: '#991B1B', marginTop: 3 }}>{rErrors.password}</div>}
@@ -259,19 +260,19 @@ export default function AuthPage({ initialTab = 'login' }) {
                 </ol>
               </div>
               <div style={{ marginBottom: 14 }}>
-                <label style={{ fontSize: 12, color: '#4B5563', marginBottom: 4, display: 'block' }}>Schwab App Key</label>
+                <label style={{ fontSize: 12, color: t.textSecondary, marginBottom: 4, display: 'block' }}>Schwab App Key</label>
                 <input style={css.input} value={rAppKey} onChange={(e) => { setRAppKey(e.target.value); setRErrors((p) => ({ ...p, app_key: '' })); }} placeholder="Your Schwab App Key" />
                 {rErrors.app_key && <div style={{ fontSize: 11, color: '#991B1B', marginTop: 3 }}>{rErrors.app_key}</div>}
               </div>
               <div style={{ marginBottom: 14 }}>
-                <label style={{ fontSize: 12, color: '#4B5563', marginBottom: 4, display: 'block' }}>Schwab App Secret</label>
+                <label style={{ fontSize: 12, color: t.textSecondary, marginBottom: 4, display: 'block' }}>Schwab App Secret</label>
                 <input type="password" style={css.input} value={rAppSecret} onChange={(e) => { setRAppSecret(e.target.value); setRErrors((p) => ({ ...p, app_secret: '' })); }} placeholder="Your Schwab App Secret" />
                 {rErrors.app_secret && <div style={{ fontSize: 11, color: '#991B1B', marginTop: 3 }}>{rErrors.app_secret}</div>}
               </div>
               <button type="submit" style={css.btnPrimary} disabled={rLoading}>
                 {rLoading ? 'Creating account…' : 'Create account → connect Schwab'}
               </button>
-              <div style={{ fontSize: 11, color: '#9CA3AF', marginTop: 14, textAlign: 'center', lineHeight: 1.5 }}>
+              <div style={{ fontSize: 11, color: t.textFaint, marginTop: 14, textAlign: 'center', lineHeight: 1.5 }}>
                 After creating your account, Schwab authorization will open automatically.<br />
                 Already have an account?{' '}
                 <span style={{ color: '#2563eb', cursor: 'pointer' }} onClick={() => switchTab('login')}>Sign in →</span>
