@@ -10,7 +10,8 @@ import CreateScheduleDialog from './CreateScheduleDialog';
 const fmt       = (n) => n != null ? `$${Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—';
 const fmtShort  = (n) => n != null ? `$${Math.round(n).toLocaleString('en-US')}` : '—';
 const lastThree = (num) => num ? `...${String(num).slice(-3)}` : '';
-const fmtDate   = (d) => d ? new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : null;
+const fmtDate     = (d) => d ? new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : null;
+const fmtDateFull = (d) => d ? new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : null;
 const fmtCST    = (iso) => {
   if (!iso) return '';
   const d = new Date(iso);
@@ -188,7 +189,7 @@ function HeroCard({ s, balance, onToggle, onDelete, onEdit, toggling }) {
             {s.name || `${s.account_name} ${lastThree(s.account_number)}`}
           </div>
           <div style={{ fontSize: 12, color: '#94b8d4', marginBottom: 10 }}>
-            {freqLabel(s)} · {s.is_test ? 'Test run' : 'Live'}{s.end_date ? ` · ends ${fmtDate(s.end_date + 'T00:00:00')}` : ''}
+            {freqLabel(s)} · {s.is_test ? 'Test run' : 'Live'}{s.end_date ? ` · ends ${fmtDateFull(s.end_date + 'T00:00:00')}` : ''}
           </div>
           <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
             {allocs.map(a => (
@@ -249,7 +250,7 @@ function ScheduleRow({ s, dotColor, onToggle, onDelete, onEdit, toggling }) {
           {s.is_test && <span style={{ fontSize: 10, padding: '1px 5px', borderRadius: 99, background: '#FEF9C3', color: '#854F0B', fontWeight: 500, marginLeft: 5 }}>Test</span>}
         </div>
         <div style={{ fontSize: 11, color: t.textFaint, marginTop: 1 }}>
-          {freqLabel(s)}{s.end_date ? ` · ends ${fmtDate(s.end_date + 'T00:00:00')}` : ''}
+          {freqLabel(s)}{s.end_date ? ` · ends ${fmtDateFull(s.end_date + 'T00:00:00')}` : ''}
         </div>
         <div style={{ display: 'flex', gap: 3, marginTop: 4, flexWrap: 'wrap' }}>
           {allocs.map((a, idx) => (
