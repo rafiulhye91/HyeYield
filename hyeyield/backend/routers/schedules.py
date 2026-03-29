@@ -22,6 +22,7 @@ class AllocationIn(BaseModel):
 
 class ScheduleCreate(BaseModel):
     account_id: int
+    name: Optional[str] = None
     is_test: bool = False
     frequency: str           # weekly | biweekly_1_15 | biweekly_alternating | monthly
     day_of_week: Optional[int] = None   # 0=Mon…4=Fri
@@ -41,6 +42,7 @@ def _next_run(schedule: Schedule):
 def _schedule_out(schedule: Schedule, account: SchwabAccount, allocations, next_run_time=None):
     return {
         "id": schedule.id,
+        "name": schedule.name,
         "account_id": schedule.account_id,
         "account_name": account.account_name,
         "account_number": account.account_number,
@@ -112,6 +114,7 @@ async def create_schedule(
     schedule = Schedule(
         user_id=current_user.id,
         account_id=body.account_id,
+        name=body.name,
         is_test=body.is_test,
         frequency=body.frequency,
         day_of_week=body.day_of_week,
@@ -173,6 +176,7 @@ async def update_schedule(
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"Allocations must total 100% (got {total:.1f}%)")
 
     schedule.account_id = body.account_id
+    schedule.name = body.name
     schedule.is_test = body.is_test
     schedule.frequency = body.frequency
     schedule.day_of_week = body.day_of_week

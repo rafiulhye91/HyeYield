@@ -183,7 +183,7 @@ function HeroCard({ s, balance, onToggle, onDelete, onEdit, toggling }) {
             {s.enabled ? `Next run · ${countdown}` : 'Paused'}
           </div>
           <div style={{ fontSize: 16, fontWeight: 500, color: '#fff', marginBottom: 2 }}>
-            {s.account_name} {lastThree(s.account_number)}
+            {s.name || `${s.account_name} ${lastThree(s.account_number)}`}
           </div>
           <div style={{ fontSize: 12, color: '#94b8d4', marginBottom: 10 }}>
             {freqLabel(s)} · {s.is_test ? 'Test run' : 'Live'}
@@ -241,7 +241,7 @@ function ScheduleRow({ s, dotColor, onToggle, onDelete, onEdit, toggling }) {
       <div style={{ width: 8, height: 8, borderRadius: '50%', flexShrink: 0, marginTop: 2, background: s.enabled ? dotColor : '#9CA3AF' }} />
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 12, fontWeight: 500, color: s.enabled ? '#111827' : '#9CA3AF' }}>
-          {s.account_name} {lastThree(s.account_number)}
+          {s.name || `${s.account_name} ${lastThree(s.account_number)}`}
           {!s.enabled && <span style={{ fontSize: 10, color: '#9CA3AF', fontWeight: 400, marginLeft: 4 }}>Paused</span>}
           {s.is_test && <span style={{ fontSize: 10, padding: '1px 5px', borderRadius: 99, background: '#FEF9C3', color: '#854F0B', fontWeight: 500, marginLeft: 5 }}>Test</span>}
         </div>

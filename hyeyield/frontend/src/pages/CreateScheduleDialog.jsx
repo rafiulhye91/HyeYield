@@ -121,6 +121,7 @@ export default function CreateScheduleDialog({ accounts, onClose, onSaved, editS
     return 'biweekly_1_15';
   };
 
+  const [name, setName] = useState(editSchedule?.name || '');
   const [accountId, setAccountId] = useState(editSchedule ? String(editSchedule.account_id) : '');
   const [rows, setRows] = useState(
     editSchedule?.allocations?.length
@@ -180,6 +181,7 @@ export default function CreateScheduleDialog({ accounts, onClose, onSaved, editS
     setError('');
     const payload = {
       account_id: parseInt(accountId),
+      name: name.trim() || null,
       is_test: isTestVal,
       frequency: finalFreq,
       day_of_week: finalDow,
@@ -215,6 +217,18 @@ export default function CreateScheduleDialog({ accounts, onClose, onSaved, editS
         {/* Body */}
         <div style={{ padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: 20 }}>
           {error && <div style={{ fontSize: 12, color: '#991B1B', background: '#FEE2E2', border: '0.5px solid #F09595', padding: '8px 10px', borderRadius: 8 }}>{error}</div>}
+
+          {/* Name */}
+          <div>
+            <label style={label}>Schedule name <span style={{ color: '#D1D5DB', fontWeight: 400 }}>(optional)</span></label>
+            <input
+              style={inp}
+              value={name}
+              placeholder="e.g. Monthly ETF buy"
+              onChange={e => setName(e.target.value)}
+              maxLength={100}
+            />
+          </div>
 
           {/* Account */}
           <div>

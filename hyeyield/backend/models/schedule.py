@@ -13,6 +13,7 @@ class Schedule(Base):
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     account_id: Mapped[int] = mapped_column(ForeignKey("schwab_accounts.id", ondelete="CASCADE"), nullable=False)
+    name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
 
     # "weekly" | "biweekly_1_15" | "biweekly_alternating" | "monthly"
     frequency: Mapped[str] = mapped_column(String(30), nullable=False)
