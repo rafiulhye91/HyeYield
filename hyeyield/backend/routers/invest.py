@@ -60,8 +60,10 @@ async def live_invest(
 
     # Send ntfy notification
     if current_user.ntfy_topic:
-        summary = _build_notify_summary(results)
-        await send_notify(current_user.ntfy_topic, "Hye-Yield: Investment Complete", summary)
+        from backend.services.scheduler import _build_invest_notification
+        for r in results:
+            title, body = _build_invest_notification(r, r.account_name)
+            await send_notify(current_user.ntfy_topic, title, body)
 
     return [dataclasses.asdict(r) for r in results]
 
