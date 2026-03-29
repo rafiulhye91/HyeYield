@@ -110,4 +110,8 @@ async def ntfy_test(current_user: User = Depends(get_current_user)):
     if not current_user.ntfy_topic:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="No ntfy topic configured")
     from backend.services.notify import send_notify
-    await send_notify(current_user.ntfy_topic, "Hye-Yield: Test notification", "Your push notifications are working correctly.")
+    # Uncomment one scenario at a time to test, then re-comment
+    await send_notify(current_user.ntfy_topic, "✅ Hye-Yield — Invest complete", "Individual ...036 · Monthly 28th\nSPUS ×22 · IAU ×7 · VDE ×2\n$2,051.68 invested")
+    # await send_notify(current_user.ntfy_topic, "⚠️ Hye-Yield — Partial fill", "Individual ...036 · Roth Test\nSPUS ×1 ✓  IAU — (insufficient cash)\n$93.94 of ~$133.13 invested")
+    # await send_notify(current_user.ntfy_topic, "🔴 Hye-Yield — Invest run failed", "Individual ...848 · Roth Test\nError: Schwab token expired")
+    # await send_notify(current_user.ntfy_topic, "⏰ Hye-Yield — Token expiring soon", "Individual ...848 · Schwab token expires in 2 days")
