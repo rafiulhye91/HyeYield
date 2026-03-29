@@ -40,6 +40,7 @@ function groupLogs(logs) {
       groups[key] = {
         key,
         date: log.created_at,
+        scheduleName: log.schedule_name || null,
         accountName: log.account_name,
         accountNumber: log.account_number,
         accountId: log.account_id,
@@ -57,11 +58,12 @@ function groupLogs(logs) {
 }
 
 const COLS = [
-  { key: 'date',    label: 'Date',            width: 175 },
-  { key: 'account', label: 'Account',         width: 160 },
-  { key: 'total',   label: 'Amount Invested', width: 130, right: true },
-  { key: 'status',  label: 'Status',          width: 90  },
-  { key: 'type',    label: 'Type',            width: 80  },
+  { key: 'date',     label: 'Date',            width: 160 },
+  { key: 'schedule', label: 'Schedule',        width: 160 },
+  { key: 'account',  label: 'Account',         width: 140 },
+  { key: 'total',    label: 'Amount Invested', width: 120, right: true },
+  { key: 'status',   label: 'Status',          width: 85  },
+  { key: 'type',     label: 'Type',            width: 75  },
 ];
 
 export default function History() {
@@ -138,6 +140,7 @@ export default function History() {
     return [...filtered].sort((a, b) => {
       let av, bv;
       if (sortCol === 'date')    { av = new Date(a.date); bv = new Date(b.date); }
+      else if (sortCol === 'schedule') { av = a.scheduleName || ''; bv = b.scheduleName || ''; }
       else if (sortCol === 'account') { av = a.accountName || ''; bv = b.accountName || ''; }
       else if (sortCol === 'total')   { av = a.total; bv = b.total; }
       else if (sortCol === 'status')  {
@@ -186,11 +189,11 @@ export default function History() {
   };
 
   const exportCSV = () => {
-    const rows = [['Date', 'Account', 'Amount Invested', 'Status', 'Type']];
+    const rows = [['Date', 'Schedule', 'Account', 'Amount Invested', 'Status', 'Type']];
     sorted.forEach(r => {
       const acct = r.accountName ? `${r.accountName} ...${String(r.accountNumber || '').slice(-3)}` : r.accountId;
       const st = r.anyFailed ? 'Failed' : r.anyPartial ? 'Partial' : 'Filled';
-      rows.push([fmtCT(r.date), acct, r.total.toFixed(2), st, r.isDryRun ? 'Dry run' : 'Live']);
+      rows.push([fmtCT(r.date), r.scheduleName || '', acct, r.total.toFixed(2), st, r.isDryRun ? 'Dry run' : 'Live']);
     });
     const csv = rows.map(row => row.map(c => `"${c}"`).join(',')).join('\n');
     const a = document.createElement('a');
@@ -328,7 +331,7 @@ export default function History() {
             </thead>
             <tbody>
               {pageSlice.length === 0 ? (
-                <tr><td colSpan={5} style={{ textAlign: 'center', color: '#9CA3AF', padding: 40, fontSize: 13 }}>No runs match your filters</td></tr>
+                <tr><td colSpan={6} style={{ textAlign: 'center', color: '#9CA3AF', padding: 40, fontSize: 13 }}>No runs match your filters</td></tr>
               ) : pageSlice.map(r => {
                 const acctLabel = r.accountName ? `${r.accountName} ...${String(r.accountNumber || '').slice(-3)}` : (r.accountId || '—');
                 const statusLabel = r.anyFailed ? 'Failed' : r.anyPartial ? 'Partial' : 'Filled';
@@ -338,6 +341,7 @@ export default function History() {
                     onMouseEnter={e => Array.from(e.currentTarget.cells).forEach(c => c.style.background = '#FAFBFC')}
                     onMouseLeave={e => Array.from(e.currentTarget.cells).forEach(c => c.style.background = '')}>
                     <td style={{ padding: '9px 12px', fontSize: 11, color: '#6B7280', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{fmtCT(r.date)}</td>
+                    <td style={{ padding: '9px 12px', fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.scheduleName || '—'}</td>
                     <td style={{ padding: '9px 12px', fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{acctLabel}</td>
                     <td style={{ padding: '9px 12px', textAlign: 'right', fontWeight: 500 }}>{fmt$(r.total)}</td>
                     <td style={{ padding: '9px 12px' }}><Badge label={statusLabel} style={badge} /></td>

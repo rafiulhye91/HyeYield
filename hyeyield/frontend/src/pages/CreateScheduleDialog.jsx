@@ -121,6 +121,7 @@ export default function CreateScheduleDialog({ accounts, onClose, onSaved, editS
     return 'biweekly_1_15';
   };
 
+  const [name, setName] = useState(editSchedule?.name || '');
   const [accountId, setAccountId] = useState(editSchedule ? String(editSchedule.account_id) : '');
   const [rows, setRows] = useState(
     editSchedule?.allocations?.length
@@ -164,6 +165,7 @@ export default function CreateScheduleDialog({ accounts, onClose, onSaved, editS
   };
 
   const save = async (isTestVal) => {
+    if (!name.trim()) { setError('Please enter a schedule name.'); return; }
     if (!accountId) { setError('Please select an account.'); return; }
     if (total !== 100) { setError(`Allocations must total 100% (currently ${total}%).`); return; }
     const validRows = rows.filter(r => r.symbol && r.pct);
@@ -180,6 +182,7 @@ export default function CreateScheduleDialog({ accounts, onClose, onSaved, editS
     setError('');
     const payload = {
       account_id: parseInt(accountId),
+      name: name.trim() || null,
       is_test: isTestVal,
       frequency: finalFreq,
       day_of_week: finalDow,
@@ -215,6 +218,18 @@ export default function CreateScheduleDialog({ accounts, onClose, onSaved, editS
         {/* Body */}
         <div style={{ padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: 20 }}>
           {error && <div style={{ fontSize: 12, color: '#991B1B', background: '#FEE2E2', border: '0.5px solid #F09595', padding: '8px 10px', borderRadius: 8 }}>{error}</div>}
+
+          {/* Name */}
+          <div>
+            <label style={label}>Schedule name</label>
+            <input
+              style={inp}
+              value={name}
+              placeholder="e.g. Monthly ETF buy"
+              onChange={e => setName(e.target.value)}
+              maxLength={100}
+            />
+          </div>
 
           {/* Account */}
           <div>
@@ -373,7 +388,7 @@ export default function CreateScheduleDialog({ accounts, onClose, onSaved, editS
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', justifyContent: 'flex-end' }}>
             <button onClick={onClose} style={{ padding: '8px 14px', background: 'none', border: '0.5px solid #FCA5A5', borderRadius: 8, fontSize: 12, cursor: 'pointer', color: '#DC2626', fontFamily: 'inherit', fontWeight: 500 }}>Cancel</button>
-            <button onClick={() => save(isTest)} disabled={saving || total !== 100 || !accountId} style={{ padding: '8px 20px', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 500, fontFamily: 'inherit', cursor: total === 100 && accountId ? 'pointer' : 'not-allowed', background: total === 100 && accountId ? '#2563eb' : '#D1D5DB', color: '#fff' }}>
+            <button onClick={() => save(isTest)} disabled={saving || total !== 100 || !accountId || !name.trim()} style={{ padding: '8px 20px', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 500, fontFamily: 'inherit', cursor: total === 100 && accountId && name.trim() ? 'pointer' : 'not-allowed', background: total === 100 && accountId && name.trim() ? '#2563eb' : '#D1D5DB', color: '#fff' }}>
               {saving ? 'Saving…' : isEdit ? 'Update Schedule' : 'Schedule'}
             </button>
           </div>
