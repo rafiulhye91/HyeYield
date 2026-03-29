@@ -10,6 +10,69 @@ logger = logging.getLogger(__name__)
 
 scheduler = AsyncIOScheduler(timezone="America/New_York")
 
+SCHWAB_REFRESH_TOKEN_TTL_DAYS = 7
+
+
+def _acct_short(account_name: str, account_number: str) -> str:
+    return f"{account_name} ...{str(account_number)[-3:]}"
+
+
+def _short_reason(msg: str) -> str:
+    """Condense a verbose order message into a short human-readable reason."""
+    if not msg:
+        return "unknown"
+    m = msg.lower()
+    if "insufficient" in m:
+        return "insufficient cash"
+    if "market closed" in m:
+        return "market closed"
+    if "token" in m and "expired" in m:
+        return "token expired"
+    return msg[:40] if len(msg) > 40 else msg
+
+
+def _build_invest_notification(result, schedule_name: str):
+    """Return (title, body) for an invest run result."""
+    acct = _acct_short(result.account_name, result.account_number)
+
+    if result.error:
+        title = "🔴 Hye-Yield — Invest run failed"
+        body = f"{acct} · {schedule_name}\nError: {result.error}"
+        return title, body
+
+    filled  = [o for o in result.orders if o.status in ("FILLED", "DRY_RUN")]
+    skipped = [o for o in result.orders if o.status not in ("FILLED", "DRY_RUN")]
+    has_partial = bool(skipped) and bool(filled)
+    all_failed  = bool(skipped) and not bool(filled)
+
+    if all_failed:
+        title = "🔴 Hye-Yield — Invest run failed"
+        parts = [f"{o.symbol} — ({_short_reason(o.message)})" for o in result.orders]
+        body = f"{acct} · {schedule_name}\n{'  '.join(parts)}\n$0.00 invested"
+        return title, body
+
+    # Build per-order summary (SPUS ×22 ✓  IAU — (insufficient cash))
+    parts = []
+    for o in result.orders:
+        if o.status in ("FILLED", "DRY_RUN"):
+            parts.append(f"{o.symbol} ×{o.shares} ✓")
+        else:
+            parts.append(f"{o.symbol} — ({_short_reason(o.message)})")
+    order_line = "  ".join(parts)
+
+    if has_partial:
+        title = "⚠️ Hye-Yield — Partial fill"
+        body = (
+            f"{acct} · {schedule_name}\n"
+            f"{order_line}\n"
+            f"${result.total_invested:.2f} of ~${result.cash_before:.2f} invested"
+        )
+    else:
+        title = "✅ Hye-Yield — Invest complete"
+        body = f"{acct} · {schedule_name}\n{order_line}\n${result.total_invested:.2f} invested"
+
+    return title, body
+
 
 # ------------------------------------------------------------------
 # Invest job
@@ -34,14 +97,9 @@ async def scheduled_invest(user_id: int) -> None:
         results = await engine.run_all(dry_run=False)
 
         if user.ntfy_topic:
-            lines = []
             for r in results:
-                if r.error:
-                    lines.append(f"{r.account_name}: ERROR — {r.error}")
-                else:
-                    lines.append(f"{r.account_name}: ${r.total_invested:.2f} invested")
-            summary = "\n".join(lines) if lines else "No accounts processed"
-            await send_notify(user.ntfy_topic, "Hye-Yield: Scheduled Investment", summary)
+                title, body = _build_invest_notification(r, r.account_name)
+                await send_notify(user.ntfy_topic, title, body)
 
 
 def register_invest_job(user_id: int, cron_expr: str) -> None:
@@ -81,7 +139,9 @@ def remove_invest_job(user_id: int) -> None:
 
 async def refresh_tokens_job(user_id: int) -> None:
     """Refresh Schwab token for user. Runs every 5 days."""
+    from datetime import datetime, timedelta
     from sqlalchemy import select
+    from backend.models.schwab_account import SchwabAccount
     from backend.models.trade_log import TradeLog
     from backend.models.user import User
     from backend.services.schwab_client import SchwabAuthError, SchwabClient
@@ -95,6 +155,23 @@ async def refresh_tokens_job(user_id: int) -> None:
             logger.info("Token refresh skipped for user_id=%d (no token)", user_id)
             return
 
+        # Proactive "expiring soon" warning if token is within 2 days of expiry
+        if user.ntfy_topic and user.refresh_token_obtained_at:
+            expiry = user.refresh_token_obtained_at + timedelta(days=SCHWAB_REFRESH_TOKEN_TTL_DAYS)
+            days_left = (expiry - datetime.utcnow()).days
+            if days_left <= 2:
+                accts_res = await db.execute(
+                    select(SchwabAccount).where(SchwabAccount.user_id == user_id)
+                )
+                accts = accts_res.scalars().all()
+                for acct in accts:
+                    acct_label = _acct_short(acct.account_name, acct.account_number)
+                    await send_notify(
+                        user.ntfy_topic,
+                        "⏰ Hye-Yield — Token expiring soon",
+                        f"{acct_label} · Schwab token expires in {max(days_left, 0)} day{'s' if days_left != 1 else ''}",
+                    )
+
         client = SchwabClient(
             app_key=user.get_app_key(),
             app_secret=user.get_app_secret(),
@@ -103,6 +180,7 @@ async def refresh_tokens_job(user_id: int) -> None:
         try:
             _, new_refresh = await client.refresh_access_token()
             user.set_refresh_token(new_refresh)
+            user.refresh_token_obtained_at = datetime.utcnow()
             await db.commit()
             logger.info("Token refreshed for user_id=%d", user_id)
         except SchwabAuthError as e:
@@ -118,11 +196,17 @@ async def refresh_tokens_job(user_id: int) -> None:
             db.add(log)
             await db.commit()
             if user.ntfy_topic:
-                await send_notify(
-                    user.ntfy_topic,
-                    "Hye-Yield: Token Expired",
-                    "Your Schwab connection has expired. Please re-connect in the Accounts page.",
+                accts_res = await db.execute(
+                    select(SchwabAccount).where(SchwabAccount.user_id == user_id)
                 )
+                accts = accts_res.scalars().all()
+                for acct in accts:
+                    acct_label = _acct_short(acct.account_name, acct.account_number)
+                    await send_notify(
+                        user.ntfy_topic,
+                        "🔴 Hye-Yield — Invest run failed",
+                        f"{acct_label}\nError: Schwab token expired",
+                    )
 
 
 def register_token_refresh_job(user_id: int) -> None:
@@ -175,12 +259,9 @@ async def scheduled_invest_schedule(schedule_id: int) -> None:
         result = await engine.run_account(schedule.account_id, dry_run=schedule.is_test)
 
         if user.ntfy_topic:
-            label = "Test Run" if schedule.is_test else "Investment"
-            if result.error:
-                msg = f"{result.account_name}: ERROR — {result.error}"
-            else:
-                msg = f"{result.account_name}: ${result.total_invested:.2f} {'simulated' if schedule.is_test else 'invested'}"
-            await send_notify(user.ntfy_topic, f"HyeYield: Scheduled {label}", msg)
+            sched_name = schedule.name or _acct_short(result.account_name, result.account_number)
+            title, body = _build_invest_notification(result, sched_name)
+            await send_notify(user.ntfy_topic, title, body)
 
         # Push real-time event to any connected browser tabs
         from backend.services.sse import notify_user

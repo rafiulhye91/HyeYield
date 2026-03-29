@@ -17,6 +17,7 @@ class User(Base):
     app_key_enc: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
     app_secret_enc: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
     refresh_token_enc: Mapped[Optional[str]] = mapped_column(String(1024), nullable=True)
+    refresh_token_obtained_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False)
 
     def get_app_key(self) -> str:
