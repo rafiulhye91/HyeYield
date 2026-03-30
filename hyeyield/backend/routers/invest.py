@@ -150,22 +150,22 @@ async def get_logs(
 
     # Fetch account info for all logs in one query
     account_ids = list({log.account_id for log in logs if log.account_id})
+    schedule_ids = list({log.schedule_id for log in logs if log.schedule_id})
     acct_map = {}
-    sched_name_map = {}  # account_id → schedule name (prefer named schedule)
+    sched_name_map = {}  # schedule_id → schedule name
     if account_ids:
-        from backend.models.schedule import Schedule
         accts_res = await db.execute(select(SchwabAccount).where(SchwabAccount.id.in_(account_ids)))
         acct_map = {a.id: a for a in accts_res.scalars().all()}
+    if schedule_ids:
+        from backend.models.schedule import Schedule
         scheds_res = await db.execute(
             select(Schedule).where(
-                Schedule.account_id.in_(account_ids),
+                Schedule.id.in_(schedule_ids),
                 Schedule.user_id == current_user.id,
             )
         )
         for s in scheds_res.scalars().all():
-            # Prefer a schedule with a name over one without
-            if s.account_id not in sched_name_map or s.name:
-                sched_name_map[s.account_id] = s.name
+            sched_name_map[s.id] = s.name
 
     return [
         {
@@ -173,7 +173,7 @@ async def get_logs(
             "account_id": log.account_id,
             "account_name": acct_map[log.account_id].account_name if log.account_id in acct_map else None,
             "account_number": acct_map[log.account_id].account_number if log.account_id in acct_map else None,
-            "schedule_name": sched_name_map.get(log.account_id),
+            "schedule_name": sched_name_map.get(log.schedule_id) if log.schedule_id else None,
             "symbol": log.symbol,
             "shares": log.shares,
             "price": log.price,
