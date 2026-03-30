@@ -270,8 +270,9 @@ async def scheduled_invest_schedule(schedule_id: int) -> None:
         # session objects, making attribute access raise MissingGreenlet in async mode.
         ntfy_topic = user.ntfy_topic
         schedule_name = schedule.name
+        user_id = schedule.user_id
 
-        engine = InvestEngine(db=db, user_id=schedule.user_id)
+        engine = InvestEngine(db=db, user_id=user_id)
         try:
             result = await engine.run_account(schedule.account_id, dry_run=schedule.is_test, schedule_id=schedule.id)
 
@@ -286,7 +287,7 @@ async def scheduled_invest_schedule(schedule_id: int) -> None:
         finally:
             # Always push SSE event so the dashboard refreshes regardless of outcome
             from backend.services.sse import notify_user
-            await notify_user(schedule.user_id, {"type": "schedule_ran", "schedule_id": schedule_id})
+            await notify_user(user_id, {"type": "schedule_ran", "schedule_id": schedule_id})
 
 
 def _build_cron_trigger(schedule) -> CronTrigger:
