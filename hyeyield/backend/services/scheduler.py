@@ -94,13 +94,16 @@ async def scheduled_invest(user_id: int) -> None:
             logger.warning("scheduled_invest: user_id=%d not found, skipping", user_id)
             return
 
+        # Capture before engine runs — commits inside the engine expire session objects.
+        ntfy_topic = user.ntfy_topic
+
         engine = InvestEngine(db=db, user_id=user_id)
         results = await engine.run_all(dry_run=False)
 
-        if user.ntfy_topic:
+        if ntfy_topic:
             for r in results:
                 title, body = _build_invest_notification(r, r.account_name)
-                await send_notify(user.ntfy_topic, title, body)
+                await send_notify(ntfy_topic, title, body)
 
 
 def register_invest_job(user_id: int, cron_expr: str) -> None:
@@ -263,13 +266,18 @@ async def scheduled_invest_schedule(schedule_id: int) -> None:
         if not user:
             return
 
+        # Capture before engine runs — db.commit() inside the engine expires all
+        # session objects, making attribute access raise MissingGreenlet in async mode.
+        ntfy_topic = user.ntfy_topic
+        schedule_name = schedule.name
+
         engine = InvestEngine(db=db, user_id=schedule.user_id)
         result = await engine.run_account(schedule.account_id, dry_run=schedule.is_test, schedule_id=schedule.id)
 
-        if user.ntfy_topic:
-            sched_name = schedule.name or _acct_short(result.account_name, result.account_number)
+        if ntfy_topic:
+            sched_name = schedule_name or _acct_short(result.account_name, result.account_number)
             title, body = _build_invest_notification(result, sched_name)
-            await send_notify(user.ntfy_topic, title, body)
+            await send_notify(ntfy_topic, title, body)
 
         # Push real-time event to any connected browser tabs
         from backend.services.sse import notify_user
