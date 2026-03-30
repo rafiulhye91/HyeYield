@@ -272,16 +272,21 @@ async def scheduled_invest_schedule(schedule_id: int) -> None:
         schedule_name = schedule.name
 
         engine = InvestEngine(db=db, user_id=schedule.user_id)
-        result = await engine.run_account(schedule.account_id, dry_run=schedule.is_test, schedule_id=schedule.id)
+        try:
+            result = await engine.run_account(schedule.account_id, dry_run=schedule.is_test, schedule_id=schedule.id)
 
-        if ntfy_topic:
-            sched_name = schedule_name or _acct_short(result.account_name, result.account_number)
-            title, body = _build_invest_notification(result, sched_name)
-            await send_notify(ntfy_topic, title, body)
-
-        # Push real-time event to any connected browser tabs
-        from backend.services.sse import notify_user
-        await notify_user(schedule.user_id, {"type": "schedule_ran", "schedule_id": schedule_id})
+            if ntfy_topic:
+                sched_name = schedule_name or _acct_short(result.account_name, result.account_number)
+                title, body = _build_invest_notification(result, sched_name)
+                await send_notify(ntfy_topic, title, body)
+        except Exception as e:
+            logger.error("Unexpected error running schedule_id=%d: %s", schedule_id, e, exc_info=True)
+            if ntfy_topic:
+                await send_notify(ntfy_topic, "🔴 Hye-Yield — Invest run failed", f"{schedule_name}\nUnexpected error: {e}")
+        finally:
+            # Always push SSE event so the dashboard refreshes regardless of outcome
+            from backend.services.sse import notify_user
+            await notify_user(schedule.user_id, {"type": "schedule_ran", "schedule_id": schedule_id})
 
 
 def _build_cron_trigger(schedule) -> CronTrigger:

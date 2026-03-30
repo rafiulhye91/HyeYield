@@ -67,12 +67,16 @@ export function DashboardProvider({ children }) {
     let es = null;
     let reconnectTimer = null;
 
-    const connect = () => {
+    const connect = (isReconnect = false) => {
       es = new EventSource(`${base}/events?token=${encodeURIComponent(token)}`);
 
       es.onmessage = (e) => {
         try {
           const data = JSON.parse(e.data);
+          // On reconnect, refresh immediately — we may have missed a schedule_ran event
+          if (data.type === 'connected' && isReconnect) {
+            refreshSchedules();
+          }
           if (data.type === 'schedule_ran') {
             refreshSchedules();
           }
@@ -81,12 +85,11 @@ export function DashboardProvider({ children }) {
 
       es.onerror = () => {
         es.close();
-        // Reconnect after 5 seconds
-        reconnectTimer = setTimeout(connect, 5000);
+        reconnectTimer = setTimeout(() => connect(true), 5000);
       };
     };
 
-    connect();
+    connect(false);
 
     return () => {
       if (es) es.close();
