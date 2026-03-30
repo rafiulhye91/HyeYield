@@ -41,8 +41,8 @@ def _build_invest_notification(result, schedule_name: str):
         body = f"{acct} · {schedule_name}\nError: {result.error}"
         return title, body
 
-    filled  = [o for o in result.orders if o.status in ("FILLED", "DRY_RUN")]
-    skipped = [o for o in result.orders if o.status not in ("FILLED", "DRY_RUN")]
+    filled  = [o for o in result.orders if o.status in ("FILLED", "WORKING", "DRY_RUN")]
+    skipped = [o for o in result.orders if o.status not in ("FILLED", "WORKING", "DRY_RUN")]
     has_partial = bool(skipped) and bool(filled)
     all_failed  = bool(skipped) and not bool(filled)
 
@@ -55,7 +55,7 @@ def _build_invest_notification(result, schedule_name: str):
     # Build per-order summary (SPUS ×22 ✓  IAU — (insufficient cash))
     parts = []
     for o in result.orders:
-        if o.status in ("FILLED", "DRY_RUN"):
+        if o.status in ("FILLED", "WORKING", "DRY_RUN"):
             parts.append(f"{o.symbol} ×{o.shares} ✓")
         else:
             parts.append(f"{o.symbol} — ({_short_reason(o.message)})")
