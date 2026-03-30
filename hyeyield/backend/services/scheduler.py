@@ -264,7 +264,7 @@ async def scheduled_invest_schedule(schedule_id: int) -> None:
             return
 
         engine = InvestEngine(db=db, user_id=schedule.user_id)
-        result = await engine.run_account(schedule.account_id, dry_run=schedule.is_test)
+        result = await engine.run_account(schedule.account_id, dry_run=schedule.is_test, schedule_id=schedule.id)
 
         if user.ntfy_topic:
             sched_name = schedule.name or _acct_short(result.account_name, result.account_number)
