@@ -97,6 +97,7 @@ export function DashboardProvider({ children }) {
           }
           if (data.type === 'schedule_ran') {
             setScheduleRunCount(c => c + 1);
+            window.dispatchEvent(new CustomEvent('hyeyield:schedule-ran'));
             refreshSchedules();
           }
         } catch (_) {}

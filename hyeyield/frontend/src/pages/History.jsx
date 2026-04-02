@@ -2,7 +2,6 @@ import { useEffect, useState, useMemo, useCallback, Fragment } from 'react';
 import Layout from '../components/Layout';
 import api from '../api/client';
 import { useTheme } from '../context/ThemeContext';
-import { useDashboard } from '../context/DashboardContext';
 
 const fmtCT = (iso) => {
   if (!iso) return '—';
@@ -92,7 +91,6 @@ const COLS = [
 
 export default function History() {
   const { t } = useTheme();
-  const { scheduleRunCount } = useDashboard();
   const [allLogs, setAllLogs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [openRow, setOpenRow] = useState(null);
@@ -126,10 +124,12 @@ export default function History() {
 
   useEffect(() => { fetchLogs(); }, [fetchLogs]);
 
-  // Re-fetch when a scheduled run fires (SSE event received by DashboardContext)
+  // Re-fetch when a scheduled run fires (event dispatched by DashboardContext)
   useEffect(() => {
-    if (scheduleRunCount > 0) fetchLogs();
-  }, [scheduleRunCount]);
+    const handler = () => fetchLogs();
+    window.addEventListener('hyeyield:schedule-ran', handler);
+    return () => window.removeEventListener('hyeyield:schedule-ran', handler);
+  }, [fetchLogs]);
 
   const applyFilters = () => {
     setApplied({ fFrom, fTo, fAcct, fType, fStatus });
