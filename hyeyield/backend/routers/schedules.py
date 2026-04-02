@@ -79,7 +79,7 @@ async def list_schedules(
     # Pause any enabled schedules whose end_date has already passed.
     dirty = False
     for s in schedules:
-        if s.enabled and s.end_date and date.today() > s.end_date:
+        if s.enabled and s.end_date and date.today() >= s.end_date:
             s.enabled = False
             s.paused_by_end_date = True
             remove_schedule_job(s.id)

@@ -254,7 +254,7 @@ async def scheduled_invest_schedule(schedule_id: int) -> None:
             logger.warning("schedule_id=%d not found or disabled, skipping", schedule_id)
             return
 
-        if schedule.end_date and date.today() > schedule.end_date:
+        if schedule.end_date and date.today() >= schedule.end_date:
             logger.info("schedule_id=%d past end_date %s, pausing", schedule_id, schedule.end_date)
             schedule.enabled = False
             schedule.paused_by_end_date = True
