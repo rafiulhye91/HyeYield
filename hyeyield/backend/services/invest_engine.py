@@ -40,7 +40,7 @@ class InvestEngine:
         self._db = db
         self._user_id = user_id
 
-    async def run_account(self, account_id: int, dry_run: bool = True, schedule_id: Optional[int] = None) -> InvestResult:
+    async def run_account(self, account_id: int, dry_run: bool = True, schedule_id: Optional[int] = None, schedule_name: Optional[str] = None) -> InvestResult:
         # 1. Load account + allocations ordered by display_order
         result = await self._db.execute(
             select(SchwabAccount).where(
@@ -166,7 +166,7 @@ class InvestEngine:
                     )
 
                 invest_result.orders.append(order)
-                await self._log(account, alloc.symbol, order, dry_run, schedule_id)
+                await self._log(account, alloc.symbol, order, dry_run, schedule_id, schedule_name)
 
             # 9. Remainder: buy remainder_symbol with leftover cash
             if remaining_cash >= account.min_order_value:
@@ -201,7 +201,7 @@ class InvestEngine:
                             remaining_cash -= shares * price
 
                         invest_result.orders.append(remainder_order)
-                        await self._log(account, account.remainder_symbol, remainder_order, dry_run, schedule_id)
+                        await self._log(account, account.remainder_symbol, remainder_order, dry_run, schedule_id, schedule_name)
                 except (SchwabAPIError, SchwabAuthError):
                     pass  # remainder failure is non-fatal
 
@@ -232,11 +232,12 @@ class InvestEngine:
             results.append(await self.run_account(account.id, dry_run=dry_run))
         return results
 
-    async def _log(self, account: SchwabAccount, symbol: str, order: OrderResult, dry_run: bool, schedule_id: Optional[int] = None):
+    async def _log(self, account: SchwabAccount, symbol: str, order: OrderResult, dry_run: bool, schedule_id: Optional[int] = None, schedule_name: Optional[str] = None):
         log = TradeLog(
             user_id=self._user_id,
             account_id=account.id,
             schedule_id=schedule_id,
+            schedule_name=schedule_name,
             symbol=symbol,
             shares=order.shares,
             price=order.price,
