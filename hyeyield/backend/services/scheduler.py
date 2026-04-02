@@ -255,8 +255,9 @@ async def scheduled_invest_schedule(schedule_id: int) -> None:
             return
 
         if schedule.end_date and date.today() > schedule.end_date:
-            logger.info("schedule_id=%d past end_date %s, disabling", schedule_id, schedule.end_date)
+            logger.info("schedule_id=%d past end_date %s, pausing", schedule_id, schedule.end_date)
             schedule.enabled = False
+            schedule.paused_by_end_date = True
             await db.commit()
             remove_schedule_job(schedule_id)
             return

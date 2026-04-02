@@ -310,6 +310,11 @@ export default function Dashboard() {
   const heroBal = hero ? balances.find(b => b.account_id === hero.account_id) : null;
 
   const handleToggle = async (id) => {
+    const sched = schedules.find(s => s.id === id);
+    if (sched && !sched.enabled && sched.paused_by_end_date) {
+      openEdit(sched);
+      return;
+    }
     setToggling(true);
     try {
       const res = await api.patch(`/schedules/${id}/toggle`);

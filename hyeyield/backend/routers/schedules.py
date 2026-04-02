@@ -57,6 +57,7 @@ def _schedule_out(schedule: Schedule, account: SchwabAccount, allocations, next_
         "minute": schedule.minute,
         "timezone": schedule.timezone,
         "enabled": schedule.enabled,
+        "paused_by_end_date": schedule.paused_by_end_date,
         "end_date": schedule.end_date.isoformat() if schedule.end_date else None,
         "allocations": [{"symbol": a.symbol, "pct": a.target_pct} for a in allocations],
         "next_run": next_run_time,
@@ -189,6 +190,12 @@ async def update_schedule(
     schedule.minute = body.minute
     schedule.timezone = body.timezone
     schedule.end_date = body.end_date
+
+    # Auto-resume if the schedule was paused because its end date expired
+    # and the user has now set a future (or no) end date.
+    if schedule.paused_by_end_date and (body.end_date is None or body.end_date > date.today()):
+        schedule.enabled = True
+        schedule.paused_by_end_date = False
 
     await db.execute(delete(Allocation).where(Allocation.account_id == body.account_id))
     for idx, a in enumerate(body.allocations):
