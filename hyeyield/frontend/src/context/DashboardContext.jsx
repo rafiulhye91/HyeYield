@@ -74,7 +74,25 @@ export function DashboardProvider({ children }) {
     return () => { clearInterval(id); document.removeEventListener('visibilitychange', onVisible); };
   }, [user, refreshSchedules]);
 
-  // SSE: receive instant push when a scheduled job fires on the backend
+  // ntfy subscription: refresh as soon as the ntfy notification is delivered (~5s)
+  useEffect(() => {
+    if (!user?.ntfy_topic) return;
+
+    const es = new EventSource(`https://ntfy.sh/${encodeURIComponent(user.ntfy_topic)}/sse`);
+
+    const handler = () => {
+      window.dispatchEvent(new CustomEvent('hyeyield:schedule-ran'));
+      refreshSchedules();
+    };
+
+    es.addEventListener('message', handler);
+    return () => {
+      es.removeEventListener('message', handler);
+      es.close();
+    };
+  }, [user?.ntfy_topic, refreshSchedules]);
+
+  // Custom SSE: fallback push from our own backend
   useEffect(() => {
     if (!user) return;
     const token = localStorage.getItem('token');
