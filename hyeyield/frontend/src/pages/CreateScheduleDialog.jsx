@@ -204,6 +204,7 @@ export default function CreateScheduleDialog({ accounts, onClose, onSaved, editS
   const save = async (isTestVal) => {
     if (!name.trim()) { setError('Please enter a schedule name.'); return; }
     if (!accountId) { setError('Please select an account.'); return; }
+    if (endDateExpired && !endDate) { setError('Please pick a new end date to resume this schedule.'); return; }
     if (total !== 100) { setError(`Allocations must total 100% (currently ${total}%).`); return; }
     const validRows = rows.filter(r => r.symbol && r.pct);
     if (!validRows.length) { setError('Add at least one ETF allocation.'); return; }
@@ -447,7 +448,7 @@ export default function CreateScheduleDialog({ accounts, onClose, onSaved, editS
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', justifyContent: 'flex-end' }}>
             <button onClick={onClose} style={{ padding: '8px 14px', background: 'none', border: '0.5px solid #FCA5A5', borderRadius: 8, fontSize: 12, cursor: 'pointer', color: '#DC2626', fontFamily: 'inherit', fontWeight: 500 }}>Cancel</button>
-            <button onClick={() => save(isTest)} disabled={saving || total !== 100 || !accountId || !name.trim()} style={{ padding: '8px 20px', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 500, fontFamily: 'inherit', cursor: total === 100 && accountId && name.trim() ? 'pointer' : 'not-allowed', background: total === 100 && accountId && name.trim() ? '#2563eb' : '#D1D5DB', color: '#fff' }}>
+            <button onClick={() => save(isTest)} disabled={saving || total !== 100 || !accountId || !name.trim() || (endDateExpired && !endDate)} style={{ padding: '8px 20px', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 500, fontFamily: 'inherit', cursor: total === 100 && accountId && name.trim() && !(endDateExpired && !endDate) ? 'pointer' : 'not-allowed', background: total === 100 && accountId && name.trim() && !(endDateExpired && !endDate) ? '#2563eb' : '#D1D5DB', color: '#fff' }}>
               {saving ? 'Saving…' : isEdit ? 'Update Schedule' : 'Schedule'}
             </button>
           </div>
