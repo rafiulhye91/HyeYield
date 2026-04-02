@@ -37,15 +37,22 @@ export function DashboardProvider({ children }) {
     loadAccounts(true);
   }, [user]);
 
-  // Refresh schedules and history every 5 minutes so next_run stays current
+  // Refresh schedules, history, and account last_run every 5 minutes so next_run stays current
   const refreshSchedules = useCallback(async () => {
     try {
-      const [schedRes, histRes] = await Promise.all([
+      const [schedRes, histRes, acctRes] = await Promise.all([
         fetchSchedules(),
         api.get('/logs', { params: { page: 1 } }).then(r => r.data).catch(() => []),
+        api.get('/accounts').then(r => r.data).catch(() => null),
       ]);
       setSchedules(schedRes);
       setHistory(histRes.slice(0, 50));
+      if (acctRes) {
+        setBalances(prev => prev.map(b => {
+          const a = acctRes.find(a => a.id === b.account_id);
+          return a ? { ...b, last_run: a.last_run, connected: a.connected, enabled: a.enabled } : b;
+        }));
+      }
     } catch (_) {}
   }, []);
 

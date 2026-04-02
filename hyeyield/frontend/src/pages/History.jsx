@@ -124,6 +124,37 @@ export default function History() {
 
   useEffect(() => { fetchLogs(); }, [fetchLogs]);
 
+  // Live-refresh when a scheduled run fires
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    const base = import.meta.env.VITE_API_URL || '';
+    let es = null;
+    let reconnectTimer = null;
+
+    const connect = (isReconnect = false) => {
+      es = new EventSource(`${base}/events?token=${encodeURIComponent(token)}`);
+      es.onmessage = (e) => {
+        try {
+          const data = JSON.parse(e.data);
+          if (data.type === 'schedule_ran' || (data.type === 'connected' && isReconnect)) {
+            fetchLogs();
+          }
+        } catch (_) {}
+      };
+      es.onerror = () => {
+        es.close();
+        reconnectTimer = setTimeout(() => connect(true), 5000);
+      };
+    };
+
+    connect(false);
+    return () => {
+      if (es) es.close();
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+    };
+  }, [fetchLogs]);
+
   const applyFilters = () => {
     setApplied({ fFrom, fTo, fAcct, fType, fStatus });
     setCurPage(1);
