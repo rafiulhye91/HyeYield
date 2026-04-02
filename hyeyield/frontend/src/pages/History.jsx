@@ -124,6 +124,13 @@ export default function History() {
 
   useEffect(() => { fetchLogs(); }, [fetchLogs]);
 
+  // Re-fetch when a scheduled run fires (event dispatched by DashboardContext)
+  useEffect(() => {
+    const handler = () => fetchLogs();
+    window.addEventListener('hyeyield:schedule-ran', handler);
+    return () => window.removeEventListener('hyeyield:schedule-ran', handler);
+  }, [fetchLogs]);
+
   const applyFilters = () => {
     setApplied({ fFrom, fTo, fAcct, fType, fStatus });
     setCurPage(1);

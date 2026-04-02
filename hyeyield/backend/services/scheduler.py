@@ -270,18 +270,31 @@ async def scheduled_invest_schedule(schedule_id: int) -> None:
         # session objects, making attribute access raise MissingGreenlet in async mode.
         ntfy_topic = user.ntfy_topic
         schedule_name = schedule.name
+        user_id = schedule.user_id
 
-        engine = InvestEngine(db=db, user_id=schedule.user_id)
-        result = await engine.run_account(schedule.account_id, dry_run=schedule.is_test, schedule_id=schedule.id)
-
-        if ntfy_topic:
-            sched_name = schedule_name or _acct_short(result.account_name, result.account_number)
-            title, body = _build_invest_notification(result, sched_name)
-            await send_notify(ntfy_topic, title, body)
-
-        # Push real-time event to any connected browser tabs
+        import asyncio
         from backend.services.sse import notify_user
-        await notify_user(schedule.user_id, {"type": "schedule_ran", "schedule_id": schedule_id})
+
+        engine = InvestEngine(db=db, user_id=user_id)
+        notify_tasks = []
+        try:
+            result = await engine.run_account(schedule.account_id, dry_run=schedule.is_test, schedule_id=schedule.id)
+
+            if ntfy_topic:
+                sched_name = schedule_name or _acct_short(result.account_name, result.account_number)
+                title, body = _build_invest_notification(result, sched_name)
+                notify_tasks.append(send_notify(ntfy_topic, title, body))
+        except Exception as e:
+            logger.error("Unexpected error running schedule_id=%d: %s", schedule_id, e, exc_info=True)
+            if ntfy_topic:
+                notify_tasks.append(send_notify(ntfy_topic, "🔴 Hye-Yield — Invest run failed", f"{schedule_name}\nUnexpected error: {e}"))
+        finally:
+            # Fire SSE and ntfy concurrently — ntfy.sh can take 20-25 s to return an
+            # HTTP response even though it pushes the notification immediately; running
+            # both in parallel means the dashboard refreshes as soon as the engine
+            # finishes rather than waiting for the slow ntfy round-trip.
+            notify_tasks.append(notify_user(user_id, {"type": "schedule_ran", "schedule_id": schedule_id}))
+            await asyncio.gather(*notify_tasks, return_exceptions=True)
 
 
 def _build_cron_trigger(schedule) -> CronTrigger:
@@ -335,10 +348,9 @@ async def load_all_jobs() -> None:
         users = result.scalars().all()
         for user in users:
             try:
-                register_invest_job(user.id, user.schedule_cron)
                 register_token_refresh_job(user.id)
             except Exception as e:
-                logger.error("Failed to register legacy job for user_id=%d: %s", user.id, e)
+                logger.error("Failed to register token refresh job for user_id=%d: %s", user.id, e)
 
         sched_result = await db.execute(select(Schedule).where(Schedule.enabled == True))
         schedules = sched_result.scalars().all()

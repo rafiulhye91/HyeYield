@@ -37,27 +37,62 @@ export function DashboardProvider({ children }) {
     loadAccounts(true);
   }, [user]);
 
-  // Refresh schedules and history every 5 minutes so next_run stays current
+  // Refresh schedules, history, and account last_run; also persists to cache
   const refreshSchedules = useCallback(async () => {
     try {
-      const [schedRes, histRes] = await Promise.all([
+      const [schedRes, histRes, acctRes] = await Promise.all([
         fetchSchedules(),
         api.get('/logs', { params: { page: 1 } }).then(r => r.data).catch(() => []),
+        api.get('/accounts').then(r => r.data).catch(() => null),
       ]);
+      const hist50 = histRes.slice(0, 50);
       setSchedules(schedRes);
-      setHistory(histRes.slice(0, 50));
+      setHistory(hist50);
+      if (acctRes) {
+        setBalances(prev => {
+          const updated = prev.map(b => {
+            const a = acctRes.find(a => a.id === b.account_id);
+            return a ? { ...b, last_run: a.last_run, connected: a.connected, enabled: a.enabled } : b;
+          });
+          // Persist fresh schedule/history data so the next page load isn't stale
+          const cached = loadCache();
+          if (cached) saveCache({ ...cached, schedules: schedRes, history: hist50, balances: updated });
+          return updated;
+        });
+      } else {
+        const cached = loadCache();
+        if (cached) saveCache({ ...cached, schedules: schedRes, history: hist50 });
+      }
     } catch (_) {}
   }, []);
 
   useEffect(() => {
     if (!user) return;
-    const id = setInterval(refreshSchedules, 5 * 60 * 1000);
+    const id = setInterval(refreshSchedules, 60 * 1000);
     const onVisible = () => { if (document.visibilityState === 'visible') refreshSchedules(); };
     document.addEventListener('visibilitychange', onVisible);
     return () => { clearInterval(id); document.removeEventListener('visibilitychange', onVisible); };
   }, [user, refreshSchedules]);
 
-  // SSE: receive instant push when a scheduled job fires on the backend
+  // ntfy subscription: refresh as soon as the ntfy notification is delivered (~5s)
+  useEffect(() => {
+    if (!user?.ntfy_topic) return;
+
+    const es = new EventSource(`https://ntfy.sh/${encodeURIComponent(user.ntfy_topic)}/sse`);
+
+    const handler = () => {
+      window.dispatchEvent(new CustomEvent('hyeyield:schedule-ran'));
+      refreshSchedules();
+    };
+
+    es.addEventListener('message', handler);
+    return () => {
+      es.removeEventListener('message', handler);
+      es.close();
+    };
+  }, [user?.ntfy_topic, refreshSchedules]);
+
+  // Custom SSE: fallback push from our own backend
   useEffect(() => {
     if (!user) return;
     const token = localStorage.getItem('token');
@@ -67,13 +102,18 @@ export function DashboardProvider({ children }) {
     let es = null;
     let reconnectTimer = null;
 
-    const connect = () => {
+    const connect = (isReconnect = false) => {
       es = new EventSource(`${base}/events?token=${encodeURIComponent(token)}`);
 
       es.onmessage = (e) => {
         try {
           const data = JSON.parse(e.data);
+          // On reconnect, refresh immediately — we may have missed a schedule_ran event
+          if (data.type === 'connected' && isReconnect) {
+            refreshSchedules();
+          }
           if (data.type === 'schedule_ran') {
+            window.dispatchEvent(new CustomEvent('hyeyield:schedule-ran'));
             refreshSchedules();
           }
         } catch (_) {}
@@ -81,12 +121,11 @@ export function DashboardProvider({ children }) {
 
       es.onerror = () => {
         es.close();
-        // Reconnect after 5 seconds
-        reconnectTimer = setTimeout(connect, 5000);
+        reconnectTimer = setTimeout(() => connect(true), 5000);
       };
     };
 
-    connect();
+    connect(false);
 
     return () => {
       if (es) es.close();
@@ -191,6 +230,7 @@ export function DashboardProvider({ children }) {
       {children}
     </DashboardContext.Provider>
   );
+
 }
 
 export function useDashboard() {
