@@ -69,10 +69,24 @@ async def list_schedules(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    from backend.services.scheduler import remove_schedule_job
+
     result = await db.execute(
         select(Schedule).where(Schedule.user_id == current_user.id)
     )
     schedules = result.scalars().all()
+
+    # Pause any enabled schedules whose end_date has already passed.
+    dirty = False
+    for s in schedules:
+        if s.enabled and s.end_date and date.today() > s.end_date:
+            s.enabled = False
+            s.paused_by_end_date = True
+            remove_schedule_job(s.id)
+            dirty = True
+    if dirty:
+        await db.commit()
+
     out = []
     for s in schedules:
         acct_res = await db.execute(select(SchwabAccount).where(SchwabAccount.id == s.account_id))
