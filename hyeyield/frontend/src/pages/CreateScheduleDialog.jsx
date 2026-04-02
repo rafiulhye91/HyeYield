@@ -91,10 +91,31 @@ export default function CreateScheduleDialog({ accounts, onClose, onSaved, editS
   const endDateExpired = !!editSchedule?.paused_by_end_date;
   const { t, isDark } = useTheme();
 
-  const tomorrow = (() => {
-    const d = new Date();
-    d.setDate(d.getDate() + 1);
-    return d.toISOString().slice(0, 10);
+  const minEndDate = (() => {
+    if (!endDateExpired) {
+      const d = new Date();
+      return d.toISOString().slice(0, 10);
+    }
+    // Compute the next run date based on current frequency settings,
+    // then set min to the day after so that run can still fire.
+    const eff = frequency === 'biweekly' ? biweeklyType : frequency;
+    const next = new Date();
+    next.setHours(0, 0, 0, 0);
+    next.setDate(next.getDate() + 1); // start from tomorrow
+
+    if (eff === 'weekly' || eff === 'biweekly_alternating') {
+      // backend day_of_week: 0=Mon…4=Fri → JS getDay(): Mon=1…Fri=5
+      const target = dayOfWeek + 1;
+      while (next.getDay() !== target) next.setDate(next.getDate() + 1);
+    } else if (eff === 'biweekly_1_15') {
+      while (next.getDate() !== 1 && next.getDate() !== 15) next.setDate(next.getDate() + 1);
+    } else if (eff === 'monthly') {
+      if (next.getDate() > dayOfMonth) next.setMonth(next.getMonth() + 1);
+      next.setDate(dayOfMonth);
+    }
+    // min = day after next run so the run fires before the schedule expires
+    next.setDate(next.getDate() + 1);
+    return next.toISOString().slice(0, 10);
   })();
 
   const inp = {
@@ -396,7 +417,7 @@ export default function CreateScheduleDialog({ accounts, onClose, onSaved, editS
                 type="date"
                 style={{ ...inp, flex: 1, fontSize: 12, padding: '5px 8px', height: 'auto', colorScheme: isDark ? 'dark' : 'light', ...(endDateExpired && !endDate ? { borderColor: '#EF4444', boxShadow: '0 0 0 2px rgba(239,68,68,0.2)' } : {}) }}
                 value={endDate}
-                min={tomorrow}
+                min={minEndDate}
                 onChange={e => setEndDate(e.target.value)}
               />
               {endDate && (
