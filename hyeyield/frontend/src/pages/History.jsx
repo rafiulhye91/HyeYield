@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo, useCallback, Fragment } from 'react';
 import Layout from '../components/Layout';
 import api from '../api/client';
 import { useTheme } from '../context/ThemeContext';
+import { useDashboard } from '../context/DashboardContext';
 
 const fmtCT = (iso) => {
   if (!iso) return '—';
@@ -91,6 +92,7 @@ const COLS = [
 
 export default function History() {
   const { t } = useTheme();
+  const { scheduleRunCount } = useDashboard();
   const [allLogs, setAllLogs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [openRow, setOpenRow] = useState(null);
@@ -124,36 +126,10 @@ export default function History() {
 
   useEffect(() => { fetchLogs(); }, [fetchLogs]);
 
-  // Live-refresh when a scheduled run fires
+  // Re-fetch when a scheduled run fires (SSE event received by DashboardContext)
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (!token) return;
-    const base = import.meta.env.VITE_API_URL || '';
-    let es = null;
-    let reconnectTimer = null;
-
-    const connect = (isReconnect = false) => {
-      es = new EventSource(`${base}/events?token=${encodeURIComponent(token)}`);
-      es.onmessage = (e) => {
-        try {
-          const data = JSON.parse(e.data);
-          if (data.type === 'schedule_ran' || (data.type === 'connected' && isReconnect)) {
-            fetchLogs();
-          }
-        } catch (_) {}
-      };
-      es.onerror = () => {
-        es.close();
-        reconnectTimer = setTimeout(() => connect(true), 5000);
-      };
-    };
-
-    connect(false);
-    return () => {
-      if (es) es.close();
-      if (reconnectTimer) clearTimeout(reconnectTimer);
-    };
-  }, [fetchLogs]);
+    if (scheduleRunCount > 0) fetchLogs();
+  }, [scheduleRunCount]);
 
   const applyFilters = () => {
     setApplied({ fFrom, fTo, fAcct, fType, fStatus });

@@ -24,6 +24,7 @@ export function DashboardProvider({ children }) {
   const [schedules, setSchedules] = useState(cache?.schedules || []);
   const [syncing, setSyncing] = useState(false);
   const [history, setHistory] = useState(cache?.history || []);
+  const [scheduleRunCount, setScheduleRunCount] = useState(0);
   const initialized = useRef(!!cache);
 
   useEffect(() => {
@@ -95,6 +96,7 @@ export function DashboardProvider({ children }) {
             refreshSchedules();
           }
           if (data.type === 'schedule_ran') {
+            setScheduleRunCount(c => c + 1);
             refreshSchedules();
           }
         } catch (_) {}
@@ -207,10 +209,11 @@ export function DashboardProvider({ children }) {
   };
 
   return (
-    <DashboardContext.Provider value={{ balances, connectedAccounts, rotations, schedules, history, loading, balancesLoading, syncing, sync, addSchedule, updateSchedule, removeSchedule, reset }}>
+    <DashboardContext.Provider value={{ balances, connectedAccounts, rotations, schedules, history, scheduleRunCount, loading, balancesLoading, syncing, sync, addSchedule, updateSchedule, removeSchedule, reset }}>
       {children}
     </DashboardContext.Provider>
   );
+
 }
 
 export function useDashboard() {
