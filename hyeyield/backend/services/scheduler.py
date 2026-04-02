@@ -335,6 +335,40 @@ def remove_schedule_job(schedule_id: int) -> None:
 
 
 # ------------------------------------------------------------------
+# Expired-schedule sweeper
+# ------------------------------------------------------------------
+
+async def pause_expired_schedules() -> None:
+    """Pause any enabled schedules whose end_date has passed. Runs at startup and daily at midnight."""
+    from sqlalchemy import select
+    from backend.models.schedule import Schedule
+
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(select(Schedule).where(Schedule.enabled == True))
+        schedules = result.scalars().all()
+        for s in schedules:
+            if s.end_date and date.today() > s.end_date:
+                logger.info("schedule_id=%d past end_date %s, pausing (sweeper)", s.id, s.end_date)
+                s.enabled = False
+                s.paused_by_end_date = True
+                remove_schedule_job(s.id)
+        await db.commit()
+
+
+def register_expiry_sweeper() -> None:
+    """Register a daily midnight job that pauses schedules whose end_date has passed."""
+    scheduler.add_job(
+        pause_expired_schedules,
+        trigger="cron",
+        id="expiry_sweeper",
+        hour=0,
+        minute=0,
+        replace_existing=True,
+    )
+    logger.info("Registered daily expiry sweeper job")
+
+
+# ------------------------------------------------------------------
 # Startup loader
 # ------------------------------------------------------------------
 
@@ -360,5 +394,10 @@ async def load_all_jobs() -> None:
                 register_schedule_job(s)
             except Exception as e:
                 logger.error("Failed to register schedule_id=%d: %s", s.id, e)
+
+    # Pause any schedules that already expired before this restart, then
+    # register the daily sweeper for schedules that expire between restarts.
+    await pause_expired_schedules()
+    register_expiry_sweeper()
 
     logger.info("Scheduler startup complete — %d job(s) registered", len(scheduler.get_jobs()))
