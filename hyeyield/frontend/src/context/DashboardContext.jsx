@@ -37,7 +37,7 @@ export function DashboardProvider({ children }) {
     loadAccounts(true);
   }, [user]);
 
-  // Refresh schedules, history, and account last_run every 5 minutes so next_run stays current
+  // Refresh schedules, history, and account last_run; also persists to cache
   const refreshSchedules = useCallback(async () => {
     try {
       const [schedRes, histRes, acctRes] = await Promise.all([
@@ -45,20 +45,30 @@ export function DashboardProvider({ children }) {
         api.get('/logs', { params: { page: 1 } }).then(r => r.data).catch(() => []),
         api.get('/accounts').then(r => r.data).catch(() => null),
       ]);
+      const hist50 = histRes.slice(0, 50);
       setSchedules(schedRes);
-      setHistory(histRes.slice(0, 50));
+      setHistory(hist50);
       if (acctRes) {
-        setBalances(prev => prev.map(b => {
-          const a = acctRes.find(a => a.id === b.account_id);
-          return a ? { ...b, last_run: a.last_run, connected: a.connected, enabled: a.enabled } : b;
-        }));
+        setBalances(prev => {
+          const updated = prev.map(b => {
+            const a = acctRes.find(a => a.id === b.account_id);
+            return a ? { ...b, last_run: a.last_run, connected: a.connected, enabled: a.enabled } : b;
+          });
+          // Persist fresh schedule/history data so the next page load isn't stale
+          const cached = loadCache();
+          if (cached) saveCache({ ...cached, schedules: schedRes, history: hist50, balances: updated });
+          return updated;
+        });
+      } else {
+        const cached = loadCache();
+        if (cached) saveCache({ ...cached, schedules: schedRes, history: hist50 });
       }
     } catch (_) {}
   }, []);
 
   useEffect(() => {
     if (!user) return;
-    const id = setInterval(refreshSchedules, 5 * 60 * 1000);
+    const id = setInterval(refreshSchedules, 60 * 1000);
     const onVisible = () => { if (document.visibilityState === 'visible') refreshSchedules(); };
     document.addEventListener('visibilitychange', onVisible);
     return () => { clearInterval(id); document.removeEventListener('visibilitychange', onVisible); };
