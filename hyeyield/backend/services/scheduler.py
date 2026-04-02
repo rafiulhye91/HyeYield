@@ -341,10 +341,9 @@ async def load_all_jobs() -> None:
         users = result.scalars().all()
         for user in users:
             try:
-                register_invest_job(user.id, user.schedule_cron)
                 register_token_refresh_job(user.id)
             except Exception as e:
-                logger.error("Failed to register legacy job for user_id=%d: %s", user.id, e)
+                logger.error("Failed to register token refresh job for user_id=%d: %s", user.id, e)
 
         sched_result = await db.execute(select(Schedule).where(Schedule.enabled == True))
         schedules = sched_result.scalars().all()
