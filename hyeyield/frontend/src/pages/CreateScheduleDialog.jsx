@@ -88,7 +88,14 @@ function AllocationRow({ row, onSymbol, onPct, onDelete, canDelete, inp }) {
 
 export default function CreateScheduleDialog({ accounts, onClose, onSaved, editSchedule }) {
   const isEdit = !!editSchedule;
+  const endDateExpired = !!editSchedule?.paused_by_end_date;
   const { t, isDark } = useTheme();
+
+  const tomorrow = (() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    return d.toISOString().slice(0, 10);
+  })();
 
   const inp = {
     width: '100%', padding: '8px 10px',
@@ -140,7 +147,7 @@ export default function CreateScheduleDialog({ accounts, onClose, onSaved, editS
   const [minute, setMinute] = useState(editSchedule ? String(editSchedule.minute).padStart(2, '0') : '35');
   const [timezone, setTimezone] = useState(editSchedule?.timezone || 'America/Chicago');
   const [isTest, setIsTest] = useState(editSchedule ? editSchedule.is_test : true);
-  const [endDate, setEndDate] = useState(editSchedule?.end_date || '');
+  const [endDate, setEndDate] = useState(endDateExpired ? '' : (editSchedule?.end_date || ''));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -387,9 +394,9 @@ export default function CreateScheduleDialog({ accounts, onClose, onSaved, editS
               <label style={{ ...labelStyle, marginBottom: 0, flexShrink: 0 }}>End date</label>
               <input
                 type="date"
-                style={{ ...inp, flex: 1, fontSize: 12, padding: '5px 8px', height: 'auto', colorScheme: isDark ? 'dark' : 'light' }}
+                style={{ ...inp, flex: 1, fontSize: 12, padding: '5px 8px', height: 'auto', colorScheme: isDark ? 'dark' : 'light', ...(endDateExpired && !endDate ? { borderColor: '#EF4444', boxShadow: '0 0 0 2px rgba(239,68,68,0.2)' } : {}) }}
                 value={endDate}
-                min={new Date().toISOString().slice(0, 10)}
+                min={tomorrow}
                 onChange={e => setEndDate(e.target.value)}
               />
               {endDate && (
