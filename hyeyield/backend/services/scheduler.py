@@ -1,5 +1,5 @@
 import logging
-from datetime import date
+from datetime import date, datetime, timedelta
 
 import pytz
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -213,18 +213,31 @@ async def refresh_tokens_job(user_id: int) -> None:
                     )
 
 
-def register_token_refresh_job(user_id: int) -> None:
-    """Add or replace the 5-day token refresh job for a user."""
+def register_token_refresh_job(user_id: int, refresh_token_obtained_at: datetime | None = None) -> None:
+    """Add or replace the 5-day token refresh job for a user.
+
+    When refresh_token_obtained_at is provided (e.g. on startup), start_date is
+    anchored to token age so a server restart doesn't reset the countdown.
+    """
     job_id = f"token_refresh_{user_id}"
+
+    start_date = None
+    if refresh_token_obtained_at is not None:
+        start_date = refresh_token_obtained_at + timedelta(days=5)
+        if start_date < datetime.utcnow():
+            # Token is overdue for a refresh — fire as soon as possible
+            start_date = datetime.utcnow()
+
     scheduler.add_job(
         refresh_tokens_job,
         trigger="interval",
         id=job_id,
         kwargs={"user_id": user_id},
         days=5,
+        start_date=start_date,
         replace_existing=True,
     )
-    logger.info("Registered token refresh job '%s'", job_id)
+    logger.info("Registered token refresh job '%s' (start_date=%s)", job_id, start_date)
 
 
 def remove_token_refresh_job(user_id: int) -> None:
@@ -365,7 +378,7 @@ async def load_all_jobs() -> None:
         users = result.scalars().all()
         for user in users:
             try:
-                register_token_refresh_job(user.id)
+                register_token_refresh_job(user.id, user.refresh_token_obtained_at)
             except Exception as e:
                 logger.error("Failed to register token refresh job for user_id=%d: %s", user.id, e)
 
