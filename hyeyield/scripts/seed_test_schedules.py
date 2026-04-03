@@ -90,11 +90,11 @@ async def seed(db: AsyncSession):
             is_test=True,
             frequency="weekly",
             day_of_week=3,   # Thursday (0=Mon … 6=Sun)
-            hour=22,         # 10 PM
-            minute=0,
+            hour=22,         # 10:30 PM
+            minute=30,
             timezone="America/Chicago",
             end_date=END_DATE,
-            enabled=True,
+            enabled=False,
         )
         db.add(schedule)
         await db.flush()  # get schedule.id
