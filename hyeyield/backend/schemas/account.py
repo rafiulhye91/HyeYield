@@ -8,14 +8,12 @@ class AccountCreate(BaseModel):
     account_name: str
     account_type: Optional[str] = None
     min_order_value: float = 1.0
-    remainder_symbol: str = "SPUS"
 
 
 class AccountUpdate(BaseModel):
     account_name: Optional[str] = None
     account_type: Optional[str] = None
     min_order_value: Optional[float] = None
-    remainder_symbol: Optional[str] = None
     enabled: Optional[bool] = None
 
 
@@ -27,7 +25,6 @@ class AccountResponse(BaseModel):
     rotation_state: int
     enabled: bool
     min_order_value: float
-    remainder_symbol: str
     last_run: Optional[datetime]
     created_at: datetime
     connected: bool

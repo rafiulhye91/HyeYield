@@ -19,7 +19,6 @@ class OrderResult:
     amount: float
     status: str
     message: str
-    is_remainder: bool = False
 
 
 @dataclass
@@ -167,43 +166,6 @@ class InvestEngine:
 
                 invest_result.orders.append(order)
                 await self._log(account, alloc.symbol, order, dry_run, schedule_id, schedule_name)
-
-            # 9. Remainder: buy remainder_symbol with leftover cash
-            if remaining_cash >= account.min_order_value:
-                try:
-                    price = await client.get_quote(access_token, account.remainder_symbol)
-                    shares = int(remaining_cash / price)
-                    if shares >= 1:
-                        if dry_run:
-                            remainder_order = OrderResult(
-                                symbol=account.remainder_symbol,
-                                shares=shares,
-                                price=price,
-                                amount=shares * price,
-                                status="DRY_RUN",
-                                message="Remainder dry run — no order placed",
-                                is_remainder=True,
-                            )
-                            remaining_cash -= shares * price
-                        else:
-                            order_id, status = await client.place_order(
-                                access_token, account_hash, account.remainder_symbol, shares
-                            )
-                            remainder_order = OrderResult(
-                                symbol=account.remainder_symbol,
-                                shares=shares,
-                                price=price,
-                                amount=shares * price,
-                                status=status,
-                                message=f"Remainder order ID: {order_id}",
-                                is_remainder=True,
-                            )
-                            remaining_cash -= shares * price
-
-                        invest_result.orders.append(remainder_order)
-                        await self._log(account, account.remainder_symbol, remainder_order, dry_run, schedule_id, schedule_name)
-                except (SchwabAPIError, SchwabAuthError):
-                    pass  # remainder failure is non-fatal
 
             invest_result.cash_after = remaining_cash
             invest_result.total_invested = cash - remaining_cash

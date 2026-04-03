@@ -16,7 +16,6 @@ class SchwabAccount(Base):
     rotation_state: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     min_order_value: Mapped[float] = mapped_column(Float, nullable=False, default=1.0)
-    remainder_symbol: Mapped[str] = mapped_column(String(10), nullable=False, default="SPUS")
     last_run: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False)
 
