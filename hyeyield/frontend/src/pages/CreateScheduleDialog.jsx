@@ -88,7 +88,35 @@ function AllocationRow({ row, onSymbol, onPct, onDelete, canDelete, inp }) {
 
 export default function CreateScheduleDialog({ accounts, onClose, onSaved, editSchedule }) {
   const isEdit = !!editSchedule;
+  const endDateExpired = !!editSchedule?.paused_by_end_date;
   const { t, isDark } = useTheme();
+
+  const minEndDate = (() => {
+    if (!endDateExpired) {
+      const d = new Date();
+      return d.toISOString().slice(0, 10);
+    }
+    // Compute the next run date based on current frequency settings,
+    // then set min to the day after so that run can still fire.
+    const eff = frequency === 'biweekly' ? biweeklyType : frequency;
+    const next = new Date();
+    next.setHours(0, 0, 0, 0);
+    next.setDate(next.getDate() + 1); // start from tomorrow
+
+    if (eff === 'weekly' || eff === 'biweekly_alternating') {
+      // backend day_of_week: 0=Mon…4=Fri → JS getDay(): Mon=1…Fri=5
+      const target = dayOfWeek + 1;
+      while (next.getDay() !== target) next.setDate(next.getDate() + 1);
+    } else if (eff === 'biweekly_1_15') {
+      while (next.getDate() !== 1 && next.getDate() !== 15) next.setDate(next.getDate() + 1);
+    } else if (eff === 'monthly') {
+      if (next.getDate() > dayOfMonth) next.setMonth(next.getMonth() + 1);
+      next.setDate(dayOfMonth);
+    }
+    // min = day after next run so the run fires before the schedule expires
+    next.setDate(next.getDate() + 1);
+    return next.toISOString().slice(0, 10);
+  })();
 
   const inp = {
     width: '100%', padding: '8px 10px',
@@ -140,7 +168,7 @@ export default function CreateScheduleDialog({ accounts, onClose, onSaved, editS
   const [minute, setMinute] = useState(editSchedule ? String(editSchedule.minute).padStart(2, '0') : '35');
   const [timezone, setTimezone] = useState(editSchedule?.timezone || 'America/Chicago');
   const [isTest, setIsTest] = useState(editSchedule ? editSchedule.is_test : true);
-  const [endDate, setEndDate] = useState(editSchedule?.end_date || '');
+  const [endDate, setEndDate] = useState(endDateExpired ? '' : (editSchedule?.end_date || ''));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -176,6 +204,7 @@ export default function CreateScheduleDialog({ accounts, onClose, onSaved, editS
   const save = async (isTestVal) => {
     if (!name.trim()) { setError('Please enter a schedule name.'); return; }
     if (!accountId) { setError('Please select an account.'); return; }
+    if (endDateExpired && !endDate) { setError('Please pick a new end date to resume this schedule.'); return; }
     if (total !== 100) { setError(`Allocations must total 100% (currently ${total}%).`); return; }
     const validRows = rows.filter(r => r.symbol && r.pct);
     if (!validRows.length) { setError('Add at least one ETF allocation.'); return; }
@@ -387,9 +416,9 @@ export default function CreateScheduleDialog({ accounts, onClose, onSaved, editS
               <label style={{ ...labelStyle, marginBottom: 0, flexShrink: 0 }}>End date</label>
               <input
                 type="date"
-                style={{ ...inp, flex: 1, fontSize: 12, padding: '5px 8px', height: 'auto', colorScheme: isDark ? 'dark' : 'light' }}
+                style={{ ...inp, flex: 1, fontSize: 12, padding: '5px 8px', height: 'auto', colorScheme: isDark ? 'dark' : 'light', ...(endDateExpired && !endDate ? { borderColor: '#EF4444', boxShadow: '0 0 0 2px rgba(239,68,68,0.2)' } : {}) }}
                 value={endDate}
-                min={new Date().toISOString().slice(0, 10)}
+                min={minEndDate}
                 onChange={e => setEndDate(e.target.value)}
               />
               {endDate && (
@@ -419,7 +448,7 @@ export default function CreateScheduleDialog({ accounts, onClose, onSaved, editS
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', justifyContent: 'flex-end' }}>
             <button onClick={onClose} style={{ padding: '8px 14px', background: 'none', border: '0.5px solid #FCA5A5', borderRadius: 8, fontSize: 12, cursor: 'pointer', color: '#DC2626', fontFamily: 'inherit', fontWeight: 500 }}>Cancel</button>
-            <button onClick={() => save(isTest)} disabled={saving || total !== 100 || !accountId || !name.trim()} style={{ padding: '8px 20px', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 500, fontFamily: 'inherit', cursor: total === 100 && accountId && name.trim() ? 'pointer' : 'not-allowed', background: total === 100 && accountId && name.trim() ? '#2563eb' : '#D1D5DB', color: '#fff' }}>
+            <button onClick={() => save(isTest)} disabled={saving || total !== 100 || !accountId || !name.trim() || (endDateExpired && !endDate)} style={{ padding: '8px 20px', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 500, fontFamily: 'inherit', cursor: total === 100 && accountId && name.trim() && !(endDateExpired && !endDate) ? 'pointer' : 'not-allowed', background: total === 100 && accountId && name.trim() && !(endDateExpired && !endDate) ? '#2563eb' : '#D1D5DB', color: '#fff' }}>
               {saving ? 'Saving…' : isEdit ? 'Update Schedule' : 'Schedule'}
             </button>
           </div>

@@ -254,9 +254,10 @@ async def scheduled_invest_schedule(schedule_id: int) -> None:
             logger.warning("schedule_id=%d not found or disabled, skipping", schedule_id)
             return
 
-        if schedule.end_date and date.today() > schedule.end_date:
-            logger.info("schedule_id=%d past end_date %s, disabling", schedule_id, schedule.end_date)
+        if schedule.end_date and date.today() >= schedule.end_date:
+            logger.info("schedule_id=%d past end_date %s, pausing", schedule_id, schedule.end_date)
             schedule.enabled = False
+            schedule.paused_by_end_date = True
             await db.commit()
             remove_schedule_job(schedule_id)
             return
@@ -278,7 +279,7 @@ async def scheduled_invest_schedule(schedule_id: int) -> None:
         engine = InvestEngine(db=db, user_id=user_id)
         notify_tasks = []
         try:
-            result = await engine.run_account(schedule.account_id, dry_run=schedule.is_test, schedule_id=schedule.id)
+            result = await engine.run_account(schedule.account_id, dry_run=schedule.is_test, schedule_id=schedule.id, schedule_name=schedule.name)
 
             if ntfy_topic:
                 sched_name = schedule_name or _acct_short(result.account_name, result.account_number)
@@ -306,7 +307,19 @@ def _build_cron_trigger(schedule) -> CronTrigger:
     if f == "biweekly_1_15":
         return CronTrigger(day="1,15", hour=h, minute=m, timezone=tz)
     if f == "biweekly_alternating":
-        return CronTrigger(day_of_week=schedule.day_of_week, week="*/2", hour=h, minute=m, timezone=tz)
+        # Anchor the every-other-week pattern to the schedule's first run date so
+        # the parity matches what the user expects rather than being fixed to ISO
+        # odd weeks (1, 3, 5 …) which is what the bare "*/2" expression produces.
+        from datetime import timedelta as _td
+        created = schedule.created_at.date() if hasattr(schedule.created_at, 'date') else date.today()
+        # backend day_of_week 0=Mon…4=Fri → ISO isoweekday 1=Mon…5=Fri
+        target_isowd = (schedule.day_of_week or 0) + 1
+        delta = (target_isowd - created.isoweekday()) % 7
+        first_run = created + _td(days=delta)
+        iso_week = first_run.isocalendar()[1]
+        # "*/2" fires on odd ISO weeks (1,3,5…); "2/2" fires on even ISO weeks (2,4,6…)
+        week_expr = "*/2" if iso_week % 2 == 1 else "2/2"
+        return CronTrigger(day_of_week=schedule.day_of_week, week=week_expr, hour=h, minute=m, timezone=tz)
     if f == "monthly":
         return CronTrigger(day=schedule.day_of_month, hour=h, minute=m, timezone=tz)
     raise ValueError(f"Unknown frequency: {f}")
@@ -334,6 +347,10 @@ def remove_schedule_job(schedule_id: int) -> None:
 
 
 # ------------------------------------------------------------------
+# Expired-schedule sweeper
+# ------------------------------------------------------------------
+
+# ------------------------------------------------------------------
 # Startup loader
 # ------------------------------------------------------------------
 
@@ -359,5 +376,6 @@ async def load_all_jobs() -> None:
                 register_schedule_job(s)
             except Exception as e:
                 logger.error("Failed to register schedule_id=%d: %s", s.id, e)
+
 
     logger.info("Scheduler startup complete — %d job(s) registered", len(scheduler.get_jobs()))
