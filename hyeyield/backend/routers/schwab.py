@@ -61,7 +61,6 @@ def _account_response(account: SchwabAccount, user: User) -> AccountResponse:
         rotation_state=account.rotation_state,
         enabled=account.enabled,
         min_order_value=account.min_order_value,
-        remainder_symbol=account.remainder_symbol,
         last_run=account.last_run,
         created_at=account.created_at,
         connected=user.refresh_token_enc is not None,
@@ -107,7 +106,6 @@ async def create_account(
         account_name=body.account_name,
         account_type=body.account_type,
         min_order_value=body.min_order_value,
-        remainder_symbol=body.remainder_symbol,
     )
 
     db.add(account)
@@ -131,8 +129,6 @@ async def update_account(
         account.account_type = body.account_type
     if body.min_order_value is not None:
         account.min_order_value = body.min_order_value
-    if body.remainder_symbol is not None:
-        account.remainder_symbol = body.remainder_symbol
     if body.enabled is not None:
         account.enabled = body.enabled
 

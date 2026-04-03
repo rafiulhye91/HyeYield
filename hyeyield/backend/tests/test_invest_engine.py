@@ -10,7 +10,7 @@ from backend.services.invest_engine import InvestEngine, InvestResult, OrderResu
 
 def make_account(
     id=1, user_id=1, account_number="12345", account_name="Test",
-    rotation_state=0, min_order_value=1.0, remainder_symbol="SPUS",
+    rotation_state=0, min_order_value=1.0,
     refresh_token_enc="enc_token",
 ):
     acct = MagicMock()
@@ -20,7 +20,6 @@ def make_account(
     acct.account_name = account_name
     acct.rotation_state = rotation_state
     acct.min_order_value = min_order_value
-    acct.remainder_symbol = remainder_symbol
     acct.refresh_token_enc = refresh_token_enc
     acct.get_app_key.return_value = "key"
     acct.get_app_secret.return_value = "secret"
@@ -127,7 +126,7 @@ async def test_whole_shares_floor():
 
         result = await engine.run_account(1, dry_run=True)
 
-    spus_order = next(o for o in result.orders if o.symbol == "SPUS" and not o.is_remainder)
+    spus_order = next(o for o in result.orders if o.symbol == "SPUS")
     assert spus_order.shares == 2  # int(500 * 1.0 / 168) = int(2.976) = 2
 
 
