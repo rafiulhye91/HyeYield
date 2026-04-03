@@ -10,6 +10,7 @@ from backend.models.schwab_account import SchwabAccount
 from backend.models.trade_log import TradeLog
 from backend.models.user import User
 from backend.services.schwab_client import SchwabAPIError, SchwabAuthError, SchwabClient
+from backend.services.whole_share_allocator import AssetInput, allocate
 
 
 @dataclass
@@ -122,58 +123,77 @@ class InvestEngine:
             rotation = account.rotation_state % n
             rotated = list(allocations[rotation:]) + list(allocations[:rotation])
 
-            remaining_cash = cash
-
-            # 8. Place orders for each allocation
+            # 8. Fetch all quotes, then run whole-share allocator.
+            asset_inputs: list[AssetInput] = []
+            quote_errors: dict[str, str] = {}
             for alloc in rotated:
-                alloc_amount = cash * (alloc.target_pct / 100.0)
                 try:
                     price = await client.get_quote(access_token, alloc.symbol)
-                    shares = int(alloc_amount / price)  # whole shares only — floor
-
-                    if shares < 1:
-                        order = OrderResult(
-                            symbol=alloc.symbol,
-                            shares=0,
-                            price=price,
-                            amount=0.0,
-                            status="SKIPPED",
-                            message=f"Insufficient funds for 1 share (need ${price:.2f}, alloc ${alloc_amount:.2f})",
-                        )
-                    elif dry_run:
-                        order = OrderResult(
-                            symbol=alloc.symbol,
-                            shares=shares,
-                            price=price,
-                            amount=shares * price,
-                            status="DRY_RUN",
-                            message="Dry run — no order placed",
-                        )
-                        remaining_cash -= shares * price
-                    else:
-                        order_id, status = await client.place_order(access_token, account_hash, alloc.symbol, shares)
-                        order = OrderResult(
-                            symbol=alloc.symbol,
-                            shares=shares,
-                            price=price,
-                            amount=shares * price,
-                            status=status,
-                            message=f"Order ID: {order_id}",
-                        )
-                        remaining_cash -= shares * price
-
+                    asset_inputs.append(AssetInput(symbol=alloc.symbol, price=price, target_pct=alloc.target_pct))
                 except (SchwabAPIError, SchwabAuthError) as e:
+                    quote_errors[alloc.symbol] = str(e)
+
+            # Log quote failures immediately.
+            for alloc in rotated:
+                if alloc.symbol in quote_errors:
                     order = OrderResult(
                         symbol=alloc.symbol,
                         shares=0,
                         price=0.0,
                         amount=0.0,
                         status="FAILED",
-                        message=str(e),
+                        message=quote_errors[alloc.symbol],
                     )
+                    invest_result.orders.append(order)
+                    await self._log(account, alloc.symbol, order, dry_run, schedule_id, schedule_name)
+
+            allocations_out = allocate(cash, asset_inputs)
+            remaining_cash = cash
+
+            for alloc_out in allocations_out:
+                if alloc_out.shares < 1:
+                    order = OrderResult(
+                        symbol=alloc_out.symbol,
+                        shares=0,
+                        price=alloc_out.price,
+                        amount=0.0,
+                        status="SKIPPED",
+                        message=f"Allocator assigned 0 shares (price ${alloc_out.price:.2f})",
+                    )
+                elif dry_run:
+                    order = OrderResult(
+                        symbol=alloc_out.symbol,
+                        shares=alloc_out.shares,
+                        price=alloc_out.price,
+                        amount=alloc_out.amount,
+                        status="DRY_RUN",
+                        message=f"Dry run — no order placed (target {alloc_out.actual_pct:.1f}%)",
+                    )
+                    remaining_cash -= alloc_out.amount
+                else:
+                    try:
+                        order_id, status = await client.place_order(access_token, account_hash, alloc_out.symbol, alloc_out.shares)
+                        order = OrderResult(
+                            symbol=alloc_out.symbol,
+                            shares=alloc_out.shares,
+                            price=alloc_out.price,
+                            amount=alloc_out.amount,
+                            status=status,
+                            message=f"Order ID: {order_id}",
+                        )
+                        remaining_cash -= alloc_out.amount
+                    except (SchwabAPIError, SchwabAuthError) as e:
+                        order = OrderResult(
+                            symbol=alloc_out.symbol,
+                            shares=0,
+                            price=alloc_out.price,
+                            amount=0.0,
+                            status="FAILED",
+                            message=str(e),
+                        )
 
                 invest_result.orders.append(order)
-                await self._log(account, alloc.symbol, order, dry_run, schedule_id, schedule_name)
+                await self._log(account, alloc_out.symbol, order, dry_run, schedule_id, schedule_name)
 
             invest_result.cash_after = remaining_cash
             invest_result.total_invested = cash - remaining_cash
