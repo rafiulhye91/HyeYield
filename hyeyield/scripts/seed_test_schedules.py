@@ -2,152 +2,152 @@
 """
 Seed / teardown Dynamic Allocation Test schedules (KAN-51 testing).
 
-Usage:
+Writes directly to the SQLite database — no login or credentials required.
+Run from the hyeyield/ directory (where hyeyield.db lives):
+
     # Create all 12 test schedules
     python scripts/seed_test_schedules.py
 
-    # Delete all test schedules whose name starts with "Dynamic Allocation Test"
+    # Delete all test schedules
     python scripts/seed_test_schedules.py --teardown
-
-Environment variables (or pass as args):
-    API_BASE_URL   e.g. http://localhost:8000          (default: http://localhost:8000)
-    API_USERNAME   your login username
-    API_PASSWORD   your login password
 """
 
 import argparse
-import os
+import asyncio
 import sys
-import requests
+from datetime import date
+from pathlib import Path
+
+# Allow importing backend modules when run from the hyeyield/ directory.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from sqlalchemy import delete, select
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from sqlalchemy.orm import sessionmaker
+
+from backend.models.schedule import Schedule
+from backend.models.schedule_allocation import ScheduleAllocation
+from backend.models.schwab_account import SchwabAccount
+from backend.models.user import User
+
+# ---------------------------------------------------------------------------
+# Database — same SQLite file the app uses
+# ---------------------------------------------------------------------------
+DB_PATH = Path(__file__).resolve().parent.parent / "hyeyield.db"
+engine = create_async_engine(f"sqlite+aiosqlite:///{DB_PATH}", echo=False)
+AsyncSessionLocal = sessionmaker(bind=engine, class_=AsyncSession, expire_on_commit=False)
 
 # ---------------------------------------------------------------------------
 # Test-case definitions
 # ---------------------------------------------------------------------------
 TEST_CASES = [
-    {"n": 1,  "allocations": [("IAU", 80), ("SPUS", 10), ("VDE", 10)]},
-    {"n": 2,  "allocations": [("F", 50), ("NOK", 50)]},
-    {"n": 3,  "allocations": [("F", 33.33), ("NOK", 33.33), ("OPEN", 33.34)]},
+    {"n": 1,  "allocations": [("IAU", 80),    ("SPUS", 10),   ("VDE", 10)]},
+    {"n": 2,  "allocations": [("F", 50),      ("NOK", 50)]},
+    {"n": 3,  "allocations": [("F", 33.33),   ("NOK", 33.33), ("OPEN", 33.34)]},
     {"n": 4,  "allocations": [("GRAB", 100)]},
     {"n": 5,  "allocations": [("BRK.A", 100)]},
-    {"n": 6,  "allocations": [("BRK.A", 50), ("SNAP", 50)]},
-    {"n": 7,  "allocations": [("SNAP", 30), ("GRAB", 30), ("OPEN", 40)]},
-    {"n": 8,  "allocations": [("SNAP", 25), ("NOK", 25), ("GRAB", 25), ("OPEN", 25)]},
-    {"n": 9,  "allocations": [("SPY", 50), ("QQQ", 50)]},
-    {"n": 10, "allocations": [("AMZN", 60), ("NVDA", 40)]},
-    {"n": 11, "allocations": [("VOO", 34), ("IWM", 33), ("BND", 33)]},
-    {"n": 12, "allocations": [("IAU", 80), ("SPUS", 10), ("VDE", 10)]},
+    {"n": 6,  "allocations": [("BRK.A", 50),  ("SNAP", 50)]},
+    {"n": 7,  "allocations": [("SNAP", 30),   ("GRAB", 30),   ("OPEN", 40)]},
+    {"n": 8,  "allocations": [("SNAP", 25),   ("NOK", 25),    ("GRAB", 25),  ("OPEN", 25)]},
+    {"n": 9,  "allocations": [("SPY", 50),    ("QQQ", 50)]},
+    {"n": 10, "allocations": [("AMZN", 60),   ("NVDA", 40)]},
+    {"n": 11, "allocations": [("VOO", 34),    ("IWM", 33),    ("BND", 33)]},
+    {"n": 12, "allocations": [("IAU", 80),    ("SPUS", 10),   ("VDE", 10)]},
 ]
 
 SCHEDULE_NAME_PREFIX = "Dynamic Allocation Test"
-
-# Thursday = day_of_week 3 (0=Mon…6=Sun, APScheduler convention matches Python weekday)
-COMMON = {
-    "frequency": "weekly",
-    "day_of_week": 3,   # Thursday
-    "hour": 22,         # 10 PM
-    "minute": 0,
-    "timezone": "America/Chicago",
-    "end_date": "2026-04-06",
-    "is_test": True,
-}
+ACCOUNT_SUFFIX = "036"
+END_DATE = date(2026, 4, 6)
 
 
-def env(key, default=None):
-    val = os.environ.get(key, default)
-    if val is None:
-        print(f"ERROR: environment variable {key} is required.", file=sys.stderr)
-        sys.exit(1)
-    return val
-
-
-def login(base_url, username, password) -> str:
-    r = requests.post(f"{base_url}/auth/login", json={"username": username, "password": password})
-    r.raise_for_status()
-    return r.json()["access_token"]
-
-
-def get_account_id(base_url, token, suffix="036") -> int:
-    r = requests.get(f"{base_url}/accounts", headers={"Authorization": f"Bearer {token}"})
-    r.raise_for_status()
-    accounts = r.json()
+async def find_account(db: AsyncSession) -> SchwabAccount:
+    result = await db.execute(select(SchwabAccount))
+    accounts = result.scalars().all()
     for acct in accounts:
-        if str(acct.get("account_number", "")).endswith(suffix):
-            return acct["id"]
-    numbers = [acct.get("account_number", "?") for acct in accounts]
-    print(f"ERROR: No account ending in ...{suffix} found. Available: {numbers}", file=sys.stderr)
+        if str(acct.account_number).endswith(ACCOUNT_SUFFIX):
+            return acct
+    numbers = [acct.account_number for acct in accounts]
+    print(f"ERROR: No account ending in ...{ACCOUNT_SUFFIX} found. Available: {numbers}", file=sys.stderr)
     sys.exit(1)
 
 
-def list_schedules(base_url, token) -> list:
-    r = requests.get(f"{base_url}/schedules", headers={"Authorization": f"Bearer {token}"})
-    r.raise_for_status()
-    return r.json()
+async def find_user(db: AsyncSession, account: SchwabAccount) -> User:
+    result = await db.execute(select(User).where(User.id == account.user_id))
+    return result.scalar_one()
 
 
-def create_schedule(base_url, token, account_id, test_case) -> dict:
-    payload = {
-        **COMMON,
-        "account_id": account_id,
-        "name": f"{SCHEDULE_NAME_PREFIX} #{test_case['n']}",
-        "allocations": [{"symbol": sym, "pct": pct} for sym, pct in test_case["allocations"]],
-    }
-    r = requests.post(f"{base_url}/schedules", json=payload, headers={"Authorization": f"Bearer {token}"})
-    r.raise_for_status()
-    return r.json()
+async def seed(db: AsyncSession):
+    account = await find_account(db)
+    user = await find_user(db, account)
+    print(f"Account: {account.account_name} ...{ACCOUNT_SUFFIX}  (user_id={user.id})")
+    print(f"Creating {len(TEST_CASES)} test schedules...\n")
 
-
-def delete_schedule(base_url, token, schedule_id) -> None:
-    r = requests.delete(f"{base_url}/schedules/{schedule_id}", headers={"Authorization": f"Bearer {token}"})
-    r.raise_for_status()
-
-
-def seed(base_url, token, account_id):
-    print(f"Creating {len(TEST_CASES)} test schedules on account ...036 (id={account_id})...\n")
     for tc in TEST_CASES:
-        try:
-            sched = create_schedule(base_url, token, account_id, tc)
-            allocs = ", ".join(f"{a['symbol']} {a['pct']}%" for a in sched["allocations"])
-            print(f"  [OK] #{tc['n']:>2}  id={sched['id']:<6} {sched['name']}  [{allocs}]")
-        except requests.HTTPError as e:
-            print(f"  [FAIL] #{tc['n']}  {e.response.status_code}: {e.response.text}")
-    print("\nDone. Run with --teardown to delete all test schedules.")
+        schedule = Schedule(
+            user_id=user.id,
+            account_id=account.id,
+            name=f"{SCHEDULE_NAME_PREFIX} #{tc['n']}",
+            is_test=True,
+            frequency="weekly",
+            day_of_week=3,   # Thursday (0=Mon … 6=Sun)
+            hour=22,         # 10 PM
+            minute=0,
+            timezone="America/Chicago",
+            end_date=END_DATE,
+            enabled=True,
+        )
+        db.add(schedule)
+        await db.flush()  # get schedule.id
+
+        for idx, (symbol, pct) in enumerate(tc["allocations"]):
+            db.add(ScheduleAllocation(
+                schedule_id=schedule.id,
+                symbol=symbol.upper(),
+                target_pct=pct,
+                display_order=idx,
+            ))
+
+        alloc_str = ", ".join(f"{sym} {pct}%" for sym, pct in tc["allocations"])
+        print(f"  [OK] #{tc['n']:>2}  id={schedule.id:<6} {schedule.name}  [{alloc_str}]")
+
+    await db.commit()
+    print(f"\nDone. {len(TEST_CASES)} schedules created.")
+    print("Run with --teardown to remove them all.")
 
 
-def teardown(base_url, token):
-    schedules = list_schedules(base_url, token)
-    targets = [s for s in schedules if s["name"].startswith(SCHEDULE_NAME_PREFIX)]
+async def teardown(db: AsyncSession):
+    result = await db.execute(
+        select(Schedule).where(Schedule.name.startswith(SCHEDULE_NAME_PREFIX))
+    )
+    targets = result.scalars().all()
+
     if not targets:
         print("No test schedules found — nothing to delete.")
         return
+
     print(f"Deleting {len(targets)} test schedule(s)...\n")
     for s in targets:
-        try:
-            delete_schedule(base_url, token, s["id"])
-            print(f"  [DELETED] id={s['id']:<6} {s['name']}")
-        except requests.HTTPError as e:
-            print(f"  [FAIL]    id={s['id']:<6} {s['name']}  {e.response.status_code}: {e.response.text}")
+        await db.execute(
+            delete(ScheduleAllocation).where(ScheduleAllocation.schedule_id == s.id)
+        )
+        await db.delete(s)
+        print(f"  [DELETED] id={s.id:<6} {s.name}")
+
+    await db.commit()
     print("\nDone.")
 
 
-def main():
+async def main():
     parser = argparse.ArgumentParser(description="Seed or teardown Dynamic Allocation Test schedules.")
-    parser.add_argument("--teardown", action="store_true", help="Delete all test schedules instead of creating them.")
+    parser.add_argument("--teardown", action="store_true", help="Delete all test schedules.")
     args = parser.parse_args()
 
-    base_url = os.environ.get("API_BASE_URL", "http://localhost:8000").rstrip("/")
-    username = env("API_USERNAME")
-    password = env("API_PASSWORD")
-
-    print(f"Connecting to {base_url} as '{username}'...")
-    token = login(base_url, username, password)
-    print("Authenticated.\n")
-
-    if args.teardown:
-        teardown(base_url, token)
-    else:
-        account_id = get_account_id(base_url, token)
-        seed(base_url, token, account_id)
+    async with AsyncSessionLocal() as db:
+        if args.teardown:
+            await teardown(db)
+        else:
+            await seed(db)
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
