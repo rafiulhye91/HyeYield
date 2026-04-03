@@ -35,6 +35,22 @@ def make_allocation(symbol, target_pct, display_order):
     return a
 
 
+def make_user(refresh_token_enc="enc_token"):
+    user = MagicMock()
+    user.refresh_token_enc = refresh_token_enc
+    user.get_app_key.return_value = "key"
+    user.get_app_secret.return_value = "secret"
+    user.get_refresh_token.return_value = "refresh"
+    user.set_refresh_token = MagicMock()
+    return user
+
+
+def make_user_result(refresh_token_enc="enc_token"):
+    user_result = MagicMock()
+    user_result.scalar_one.return_value = make_user(refresh_token_enc)
+    return user_result
+
+
 def make_engine(db=None):
     return InvestEngine(db=db or AsyncMock(), user_id=1)
 
@@ -66,7 +82,7 @@ async def test_rotation_advances_order():
 
     log_result = MagicMock()
 
-    db.execute = AsyncMock(side_effect=[account_result, alloc_result, log_result, log_result, log_result, log_result])
+    db.execute = AsyncMock(side_effect=[account_result, make_user_result(), alloc_result, log_result, log_result, log_result])
 
     with patch("backend.services.invest_engine.SchwabClient") as MockClient:
         client = MockClient.return_value
@@ -110,7 +126,7 @@ async def test_whole_shares_floor():
     alloc_result.scalars.return_value.all.return_value = allocations
     log_result = MagicMock()
 
-    db.execute = AsyncMock(side_effect=[account_result, alloc_result, log_result, log_result])
+    db.execute = AsyncMock(side_effect=[account_result, make_user_result(), alloc_result, log_result, log_result])
 
     with patch("backend.services.invest_engine.SchwabClient") as MockClient:
         client = MockClient.return_value
@@ -127,7 +143,7 @@ async def test_whole_shares_floor():
         result = await engine.run_account(1, dry_run=True)
 
     spus_order = next(o for o in result.orders if o.symbol == "SPUS")
-    assert spus_order.shares == 2  # int(500 * 1.0 / 168) = int(2.976) = 2
+    assert spus_order.shares == 2  # allocator: floor(500/168) = 2 (only 1 asset)
 
 
 # ------------------------------------------------------------------
@@ -149,7 +165,7 @@ async def test_dry_run_no_orders_placed():
     alloc_result.scalars.return_value.all.return_value = allocations
     log_result = MagicMock()
 
-    db.execute = AsyncMock(side_effect=[account_result, alloc_result, log_result, log_result])
+    db.execute = AsyncMock(side_effect=[account_result, make_user_result(), alloc_result, log_result, log_result])
 
     with patch("backend.services.invest_engine.SchwabClient") as MockClient:
         client = MockClient.return_value
@@ -189,7 +205,7 @@ async def test_insufficient_cash_returns_error():
     alloc_result = MagicMock()
     alloc_result.scalars.return_value.all.return_value = allocations
 
-    db.execute = AsyncMock(side_effect=[account_result, alloc_result])
+    db.execute = AsyncMock(side_effect=[account_result, make_user_result(), alloc_result])
 
     with patch("backend.services.invest_engine.SchwabClient") as MockClient:
         client = MockClient.return_value
