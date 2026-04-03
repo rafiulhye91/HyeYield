@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.database import get_db
 from backend.models.allocation import Allocation
 from backend.models.schedule import Schedule
+from backend.models.schedule_allocation import ScheduleAllocation
 from backend.models.schwab_account import SchwabAccount
 from backend.utils.jwt_utils import get_current_user
 from backend.models.user import User
@@ -94,7 +95,7 @@ async def list_schedules(
         if not account:
             continue
         alloc_res = await db.execute(
-            select(Allocation).where(Allocation.account_id == s.account_id).order_by(Allocation.display_order)
+            select(ScheduleAllocation).where(ScheduleAllocation.schedule_id == s.id).order_by(ScheduleAllocation.display_order)
         )
         allocs = alloc_res.scalars().all()
         out.append(_schedule_out(s, account, allocs, _next_run(s)))
@@ -145,11 +146,9 @@ async def create_schedule(
     db.add(schedule)
     await db.flush()  # get schedule.id
 
-    # Replace account allocations
-    await db.execute(delete(Allocation).where(Allocation.account_id == body.account_id))
     for idx, a in enumerate(body.allocations):
-        db.add(Allocation(
-            account_id=body.account_id,
+        db.add(ScheduleAllocation(
+            schedule_id=schedule.id,
             symbol=a.symbol.upper(),
             target_pct=a.pct,
             display_order=idx,
@@ -161,7 +160,7 @@ async def create_schedule(
     register_schedule_job(schedule)
 
     alloc_res = await db.execute(
-        select(Allocation).where(Allocation.account_id == body.account_id).order_by(Allocation.display_order)
+        select(ScheduleAllocation).where(ScheduleAllocation.schedule_id == schedule.id).order_by(ScheduleAllocation.display_order)
     )
     allocs = alloc_res.scalars().all()
     return _schedule_out(schedule, account, allocs, _next_run(schedule))
@@ -211,9 +210,9 @@ async def update_schedule(
         schedule.enabled = True
         schedule.paused_by_end_date = False
 
-    await db.execute(delete(Allocation).where(Allocation.account_id == body.account_id))
+    await db.execute(delete(ScheduleAllocation).where(ScheduleAllocation.schedule_id == schedule.id))
     for idx, a in enumerate(body.allocations):
-        db.add(Allocation(account_id=body.account_id, symbol=a.symbol.upper(), target_pct=a.pct, display_order=idx))
+        db.add(ScheduleAllocation(schedule_id=schedule.id, symbol=a.symbol.upper(), target_pct=a.pct, display_order=idx))
 
     await db.commit()
     await db.refresh(schedule)
@@ -223,7 +222,7 @@ async def update_schedule(
         register_schedule_job(schedule)
 
     alloc_res = await db.execute(
-        select(Allocation).where(Allocation.account_id == body.account_id).order_by(Allocation.display_order)
+        select(ScheduleAllocation).where(ScheduleAllocation.schedule_id == schedule.id).order_by(ScheduleAllocation.display_order)
     )
     allocs = alloc_res.scalars().all()
     return _schedule_out(schedule, account, allocs, _next_run(schedule))
@@ -256,7 +255,7 @@ async def toggle_schedule(
     acct_res = await db.execute(select(SchwabAccount).where(SchwabAccount.id == schedule.account_id))
     account = acct_res.scalar_one_or_none()
     alloc_res = await db.execute(
-        select(Allocation).where(Allocation.account_id == schedule.account_id).order_by(Allocation.display_order)
+        select(ScheduleAllocation).where(ScheduleAllocation.schedule_id == schedule.id).order_by(ScheduleAllocation.display_order)
     )
     allocs = alloc_res.scalars().all()
     return _schedule_out(schedule, account, allocs, _next_run(schedule))

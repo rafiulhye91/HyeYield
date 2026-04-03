@@ -5,6 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.models.allocation import Allocation
+from backend.models.schedule_allocation import ScheduleAllocation
 from backend.models.schwab_account import SchwabAccount
 from backend.models.trade_log import TradeLog
 from backend.models.user import User
@@ -70,12 +71,19 @@ class InvestEngine:
             invest_result.error = "Not connected to Schwab"
             return invest_result
 
-        # 3. Load allocations
-        alloc_result = await self._db.execute(
-            select(Allocation)
-            .where(Allocation.account_id == account_id)
-            .order_by(Allocation.display_order)
-        )
+        # 3. Load allocations — per-schedule if running from a schedule, else account-level
+        if schedule_id:
+            alloc_result = await self._db.execute(
+                select(ScheduleAllocation)
+                .where(ScheduleAllocation.schedule_id == schedule_id)
+                .order_by(ScheduleAllocation.display_order)
+            )
+        else:
+            alloc_result = await self._db.execute(
+                select(Allocation)
+                .where(Allocation.account_id == account_id)
+                .order_by(Allocation.display_order)
+            )
         allocations = alloc_result.scalars().all()
         if not allocations:
             invest_result.error = "No allocations configured"
