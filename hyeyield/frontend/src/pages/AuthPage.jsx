@@ -84,7 +84,7 @@ export default function AuthPage({ initialTab = 'login' }) {
       localStorage.setItem('token', res.data.access_token);
       const authRes = await api.get('/schwab/auth-url');
       tab.location.href = authRes.data.auth_url;
-      navigate('/accounts');
+      navigate('/dashboard');
     } catch (err) {
       tab.close();
       setRError(err.response?.data?.detail || 'Registration failed.');

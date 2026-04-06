@@ -11,7 +11,7 @@ export default function SchwabRedirect() {
     api.post('/schwab/connect', { redirect_url: fullUrl })
       .then(() => {
         setStatus('Connected! Redirecting…');
-        setTimeout(() => navigate('/accounts'), 1500);
+        setTimeout(() => navigate('/dashboard'), 1500);
       })
       .catch((err) => {
         setStatus(err.response?.data?.detail || 'Connection failed. Please try again.');
