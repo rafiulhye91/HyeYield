@@ -415,11 +415,14 @@ export default function History() {
                           {/* Order rows */}
                           {r.orders.map((order, idx) => {
                             const chip = CHIP_COLORS[order.symbol] || { bg: '#F3F4F6', color: '#374151' };
-                            const isSkipped = order.status !== 'FILLED';
+                            const isSkipped = order.status === 'SKIPPED' || order.status === 'REJECTED';
                             const orderStatus = order.status === 'FILLED' ? 'Filled'
+                              : order.status === 'DRY_RUN' ? 'Test Run'
                               : (order.status === 'SKIPPED' || order.status === 'REJECTED') ? 'Skipped' : 'Failed';
                             const orderBadge = orderStatus === 'Filled'
                               ? { bg: '#ECFDF5', color: '#065F46' }
+                              : orderStatus === 'Test Run'
+                              ? { bg: '#EFF6FF', color: '#1D4ED8' }
                               : orderStatus === 'Skipped'
                               ? { bg: '#F3F4F6', color: '#9CA3AF' }
                               : { bg: '#FEF2F2', color: '#991B1B' };
