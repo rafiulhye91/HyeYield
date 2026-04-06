@@ -4,7 +4,6 @@ import { DashboardProvider } from './context/DashboardContext';
 import { ThemeProvider } from './context/ThemeContext';
 import AuthPage from './pages/AuthPage';
 import Dashboard from './pages/Dashboard';
-import Accounts from './pages/Accounts';
 import History from './pages/History';
 import Settings from './pages/Settings';
 import SchwabRedirect from './pages/SchwabRedirect';
@@ -31,8 +30,7 @@ export default function App() {
           <Route path="/login" element={<PublicRoute><AuthPage initialTab="login" /></PublicRoute>} />
           <Route path="/register" element={<PublicRoute><AuthPage initialTab="register" /></PublicRoute>} />
           <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-          <Route path="/accounts" element={<ProtectedRoute><Accounts /></ProtectedRoute>} />
-          <Route path="/history" element={<ProtectedRoute><History /></ProtectedRoute>} />
+<Route path="/history" element={<ProtectedRoute><History /></ProtectedRoute>} />
           <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
           <Route path="/redirect" element={<ProtectedRoute><SchwabRedirect /></ProtectedRoute>} />
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
