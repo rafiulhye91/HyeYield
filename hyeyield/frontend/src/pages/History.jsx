@@ -73,7 +73,7 @@ function groupLogs(logs) {
     }
     groups[key].total += log.amount || 0;
     if (log.status === 'FAILED' || log.status === 'REJECTED') groups[key].anyFailed = true;
-    if (log.status !== 'FILLED' && log.status !== 'FAILED' && log.status !== 'REJECTED') groups[key].anyPartial = true;
+    if (log.status !== 'FILLED' && log.status !== 'WORKING' && log.status !== 'FAILED' && log.status !== 'REJECTED') groups[key].anyPartial = true;
     groups[key].orders.push(log);
   });
   return Object.values(groups).sort((a, b) => new Date(b.date) - new Date(a.date));
@@ -416,7 +416,7 @@ export default function History() {
                           {r.orders.map((order, idx) => {
                             const chip = CHIP_COLORS[order.symbol] || { bg: '#F3F4F6', color: '#374151' };
                             const isSkipped = order.status === 'SKIPPED' || order.status === 'REJECTED';
-                            const orderStatus = order.status === 'FILLED' ? 'Filled'
+                            const orderStatus = (order.status === 'FILLED' || order.status === 'WORKING') ? 'Filled'
                               : order.status === 'DRY_RUN' ? 'Test Run'
                               : (order.status === 'SKIPPED' || order.status === 'REJECTED') ? 'Skipped' : 'Failed';
                             const orderBadge = orderStatus === 'Filled'
