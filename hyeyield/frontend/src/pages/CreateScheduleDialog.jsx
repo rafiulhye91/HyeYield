@@ -339,9 +339,9 @@ export default function CreateScheduleDialog({ accounts, onClose, onSaved, editS
                   { key: 'biweekly_1_15', label: '1st & 15th', sub: 'Every month' },
                   { key: 'biweekly_alternating', label: `Every other ${DAYS[dayOfWeek]}`, sub: 'Alternating weeks' },
                 ].map(opt => (
-                  <div key={opt.key} onClick={() => setBiweeklyType(opt.key)} style={{ flex: 1, padding: 10, border: `1px solid ${biweeklyType === opt.key ? '#2563eb' : t.inputBorderLight}`, borderRadius: 8, cursor: 'pointer', background: biweeklyType === opt.key ? '#EFF6FF' : t.cardBg }}>
-                    <div style={{ fontSize: 12, fontWeight: 500, color: t.textPrimary }}>{opt.label}</div>
-                    <div style={{ fontSize: 10, color: t.textFaint, marginTop: 2 }}>{opt.sub}</div>
+                  <div key={opt.key} onClick={() => setBiweeklyType(opt.key)} style={{ flex: 1, padding: 10, border: `1px solid ${biweeklyType === opt.key ? '#2563eb' : t.inputBorderLight}`, borderRadius: 8, cursor: 'pointer', background: biweeklyType === opt.key ? (isDark ? '#1E3A5F' : '#EFF6FF') : t.cardBg }}>
+                    <div style={{ fontSize: 12, fontWeight: 500, color: biweeklyType === opt.key ? (isDark ? '#93C5FD' : '#1E40AF') : t.textPrimary }}>{opt.label}</div>
+                    <div style={{ fontSize: 10, color: biweeklyType === opt.key ? (isDark ? '#60A5FA' : '#3B82F6') : t.textFaint, marginTop: 2 }}>{opt.sub}</div>
                   </div>
                 ))}
               </div>
