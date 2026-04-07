@@ -24,6 +24,7 @@ class Schedule(Base):
     minute: Mapped[int] = mapped_column(Integer, nullable=False, default=35)
     timezone: Mapped[str] = mapped_column(String(50), nullable=False, default="America/Chicago")
 
+    start_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     end_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
 
     is_test: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
