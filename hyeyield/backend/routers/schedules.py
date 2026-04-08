@@ -214,8 +214,15 @@ async def update_schedule(
         schedule.enabled = True
         schedule.paused_by_end_date = False
 
-    await db.execute(delete(ScheduleAllocation).where(ScheduleAllocation.schedule_id == schedule.id))
-    await db.flush()  # force delete to apply before inserts to avoid session identity-map re-insertion
+    # Use ORM-level delete so the session identity map is updated correctly.
+    # A CORE bulk delete with expire_on_commit=False leaves old objects in the
+    # identity map, causing them to be re-inserted on commit.
+    existing = (await db.execute(
+        select(ScheduleAllocation).where(ScheduleAllocation.schedule_id == schedule.id)
+    )).scalars().all()
+    for alloc in existing:
+        await db.delete(alloc)
+    await db.flush()
     for idx, a in enumerate(body.allocations):
         db.add(ScheduleAllocation(schedule_id=schedule.id, symbol=a.symbol.upper(), target_pct=a.pct, display_order=idx))
 
