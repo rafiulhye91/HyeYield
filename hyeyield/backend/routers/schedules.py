@@ -149,6 +149,11 @@ async def create_schedule(
     db.add(schedule)
     await db.flush()  # get schedule.id
 
+    # Belt-and-suspenders: purge any orphaned allocations that SQLite may have
+    # left behind if this ID was recycled from a previously deleted schedule.
+    await db.execute(delete(ScheduleAllocation).where(ScheduleAllocation.schedule_id == schedule.id))
+    await db.flush()
+
     for idx, a in enumerate(body.allocations):
         db.add(ScheduleAllocation(
             schedule_id=schedule.id,
@@ -289,5 +294,9 @@ async def delete_schedule(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Schedule not found")
 
     remove_schedule_job(schedule_id)
+    # Explicitly delete allocations first so no orphans remain regardless of
+    # whether the SQLite PRAGMA foreign_keys cascade fires on this connection.
+    await db.execute(delete(ScheduleAllocation).where(ScheduleAllocation.schedule_id == schedule_id))
+    await db.flush()
     await db.delete(schedule)
     await db.commit()
