@@ -168,6 +168,7 @@ export default function CreateScheduleDialog({ accounts, onClose, onSaved, editS
   const [minute, setMinute] = useState(editSchedule ? String(editSchedule.minute).padStart(2, '0') : '35');
   const [timezone, setTimezone] = useState(editSchedule?.timezone || 'America/Chicago');
   const [isTest, setIsTest] = useState(editSchedule ? editSchedule.is_test : true);
+  const [startDate, setStartDate] = useState(editSchedule?.start_date || '');
   const [endDate, setEndDate] = useState(endDateExpired ? '' : (editSchedule?.end_date || ''));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -228,6 +229,7 @@ export default function CreateScheduleDialog({ accounts, onClose, onSaved, editS
       hour: parseInt(hour),
       minute: parseInt(minute),
       timezone,
+      start_date: startDate || null,
       end_date: endDate || null,
       allocations: validRows.map(r => ({ symbol: r.symbol, pct: parseFloat(r.pct) })),
     };
@@ -337,9 +339,9 @@ export default function CreateScheduleDialog({ accounts, onClose, onSaved, editS
                   { key: 'biweekly_1_15', label: '1st & 15th', sub: 'Every month' },
                   { key: 'biweekly_alternating', label: `Every other ${DAYS[dayOfWeek]}`, sub: 'Alternating weeks' },
                 ].map(opt => (
-                  <div key={opt.key} onClick={() => setBiweeklyType(opt.key)} style={{ flex: 1, padding: 10, border: `1px solid ${biweeklyType === opt.key ? '#2563eb' : t.inputBorderLight}`, borderRadius: 8, cursor: 'pointer', background: biweeklyType === opt.key ? '#EFF6FF' : t.cardBg }}>
-                    <div style={{ fontSize: 12, fontWeight: 500, color: t.textPrimary }}>{opt.label}</div>
-                    <div style={{ fontSize: 10, color: t.textFaint, marginTop: 2 }}>{opt.sub}</div>
+                  <div key={opt.key} onClick={() => setBiweeklyType(opt.key)} style={{ flex: 1, padding: 10, border: `1px solid ${biweeklyType === opt.key ? '#2563eb' : t.inputBorderLight}`, borderRadius: 8, cursor: 'pointer', background: biweeklyType === opt.key ? (isDark ? '#1E3A5F' : '#EFF6FF') : t.cardBg }}>
+                    <div style={{ fontSize: 12, fontWeight: 500, color: biweeklyType === opt.key ? (isDark ? '#93C5FD' : '#1E40AF') : t.textPrimary }}>{opt.label}</div>
+                    <div style={{ fontSize: 10, color: biweeklyType === opt.key ? (isDark ? '#60A5FA' : '#3B82F6') : t.textFaint, marginTop: 2 }}>{opt.sub}</div>
                   </div>
                 ))}
               </div>
@@ -409,6 +411,25 @@ export default function CreateScheduleDialog({ accounts, onClose, onSaved, editS
 
         {/* Footer */}
         <div style={{ padding: '14px 20px', borderTop: `0.5px solid ${t.cardBorder}` }}>
+
+          {/* Start Date */}
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <label style={{ ...labelStyle, marginBottom: 0, flexShrink: 0 }}>Start date</label>
+              <input
+                type="date"
+                style={{ ...inp, flex: 1, fontSize: 12, padding: '5px 8px', height: 'auto', colorScheme: isDark ? 'dark' : 'light' }}
+                value={startDate}
+                min={new Date().toISOString().slice(0, 10)}
+                onChange={e => setStartDate(e.target.value)}
+              />
+              {startDate && (
+                <button onClick={() => setStartDate('')} style={{ padding: '4px 8px', background: 'none', border: `0.5px solid ${t.inputBorderLight}`, borderRadius: 6, fontSize: 11, cursor: 'pointer', color: t.textMuted, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
+                  Clear
+                </button>
+              )}
+            </div>
+          </div>
 
           {/* End Date */}
           <div style={{ marginBottom: 12 }}>

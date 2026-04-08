@@ -315,26 +315,28 @@ def _build_cron_trigger(schedule) -> CronTrigger:
     tz = pytz.timezone(schedule.timezone)
     f = schedule.frequency
     h, m = schedule.hour, schedule.minute
+    start_date = schedule.start_date or None  # date or None
     if f == "weekly":
-        return CronTrigger(day_of_week=schedule.day_of_week, hour=h, minute=m, timezone=tz)
+        return CronTrigger(day_of_week=schedule.day_of_week, hour=h, minute=m, timezone=tz, start_date=start_date)
     if f == "biweekly_1_15":
-        return CronTrigger(day="1,15", hour=h, minute=m, timezone=tz)
+        return CronTrigger(day="1,15", hour=h, minute=m, timezone=tz, start_date=start_date)
     if f == "biweekly_alternating":
-        # Anchor the every-other-week pattern to the schedule's first run date so
-        # the parity matches what the user expects rather than being fixed to ISO
-        # odd weeks (1, 3, 5 …) which is what the bare "*/2" expression produces.
+        # Anchor the every-other-week pattern to the earliest relevant date:
+        # start_date if set (user's chosen first run date), otherwise created_at.
         from datetime import timedelta as _td
-        created = schedule.created_at.date() if hasattr(schedule.created_at, 'date') else date.today()
+        anchor = schedule.start_date if schedule.start_date else (
+            schedule.created_at.date() if hasattr(schedule.created_at, 'date') else date.today()
+        )
         # backend day_of_week 0=Mon…4=Fri → ISO isoweekday 1=Mon…5=Fri
         target_isowd = (schedule.day_of_week or 0) + 1
-        delta = (target_isowd - created.isoweekday()) % 7
-        first_run = created + _td(days=delta)
+        delta = (target_isowd - anchor.isoweekday()) % 7
+        first_run = anchor + _td(days=delta)
         iso_week = first_run.isocalendar()[1]
         # "*/2" fires on odd ISO weeks (1,3,5…); "2/2" fires on even ISO weeks (2,4,6…)
         week_expr = "*/2" if iso_week % 2 == 1 else "2/2"
-        return CronTrigger(day_of_week=schedule.day_of_week, week=week_expr, hour=h, minute=m, timezone=tz)
+        return CronTrigger(day_of_week=schedule.day_of_week, week=week_expr, hour=h, minute=m, timezone=tz, start_date=start_date)
     if f == "monthly":
-        return CronTrigger(day=schedule.day_of_month, hour=h, minute=m, timezone=tz)
+        return CronTrigger(day=schedule.day_of_month, hour=h, minute=m, timezone=tz, start_date=start_date)
     raise ValueError(f"Unknown frequency: {f}")
 
 

@@ -32,6 +32,7 @@ class ScheduleCreate(BaseModel):
     hour: int = 9
     minute: int = 35
     timezone: str = "America/Chicago"
+    start_date: Optional[date] = None
     end_date: Optional[date] = None
     allocations: List[AllocationIn]
 
@@ -59,6 +60,7 @@ def _schedule_out(schedule: Schedule, account: SchwabAccount, allocations, next_
         "timezone": schedule.timezone,
         "enabled": schedule.enabled,
         "paused_by_end_date": schedule.paused_by_end_date,
+        "start_date": schedule.start_date.isoformat() if schedule.start_date else None,
         "end_date": schedule.end_date.isoformat() if schedule.end_date else None,
         "allocations": [{"symbol": a.symbol, "pct": a.target_pct} for a in allocations],
         "next_run": next_run_time,
@@ -141,6 +143,7 @@ async def create_schedule(
         hour=body.hour,
         minute=body.minute,
         timezone=body.timezone,
+        start_date=body.start_date,
         end_date=body.end_date,
     )
     db.add(schedule)
@@ -202,6 +205,7 @@ async def update_schedule(
     schedule.hour = body.hour
     schedule.minute = body.minute
     schedule.timezone = body.timezone
+    schedule.start_date = body.start_date
     schedule.end_date = body.end_date
 
     # Auto-resume if the schedule was paused because its end date expired
@@ -211,6 +215,7 @@ async def update_schedule(
         schedule.paused_by_end_date = False
 
     await db.execute(delete(ScheduleAllocation).where(ScheduleAllocation.schedule_id == schedule.id))
+    await db.flush()  # force delete to apply before inserts to avoid session identity-map re-insertion
     for idx, a in enumerate(body.allocations):
         db.add(ScheduleAllocation(schedule_id=schedule.id, symbol=a.symbol.upper(), target_pct=a.pct, display_order=idx))
 
