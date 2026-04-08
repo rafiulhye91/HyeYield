@@ -215,6 +215,7 @@ async def update_schedule(
         schedule.paused_by_end_date = False
 
     await db.execute(delete(ScheduleAllocation).where(ScheduleAllocation.schedule_id == schedule.id))
+    await db.flush()  # force delete to apply before inserts to avoid session identity-map re-insertion
     for idx, a in enumerate(body.allocations):
         db.add(ScheduleAllocation(schedule_id=schedule.id, symbol=a.symbol.upper(), target_pct=a.pct, display_order=idx))
 
