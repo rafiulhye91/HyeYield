@@ -286,7 +286,7 @@ export default function Dashboard() {
   const [editingSchedule, setEditing] = useState(null);
   const [toggling, setToggling]       = useState(false);
 
-  const openEdit  = (s) => setEditing(s);
+  const openEdit  = (s) => { setShowDialog(false); setEditing(s); };
   const closeEdit = () => setEditing(null);
 
   const disconnected = balances.filter((b) => b.enabled && !b.connected);
@@ -358,7 +358,7 @@ export default function Dashboard() {
         {schedules.length === 0 ? (
           /* Empty state */
           <div style={{ background: t.cardBg, borderRadius: 14, border: `0.5px solid ${t.cardBorder}`, overflow: 'hidden', marginBottom: 28 }}>
-            <div onClick={() => setShowDialog(true)} style={{ padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}
+            <div onClick={() => { setEditing(null); setShowDialog(true); }} style={{ padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}
               onMouseEnter={e => e.currentTarget.style.background = t.tableRowHover}
               onMouseLeave={e => e.currentTarget.style.background = ''}>
               <div style={{ width: 24, height: 24, borderRadius: 6, border: `1.5px dashed ${t.inputBorderLight}`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: t.textFaint, fontSize: 14, flexShrink: 0 }}>+</div>
@@ -378,7 +378,7 @@ export default function Dashboard() {
               {sorted.map(s => (
                 <ScheduleRow key={s.id} s={s} dotColor={dotColorOf[s.id]} onToggle={handleToggle} onDelete={handleDelete} onEdit={openEdit} toggling={toggling} />
               ))}
-              <div onClick={() => setShowDialog(true)} style={{ padding: '11px 16px', display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', borderTop: `0.5px solid ${t.tableRowBorder}` }}
+              <div onClick={() => { setEditing(null); setShowDialog(true); }} style={{ padding: '11px 16px', display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', borderTop: `0.5px solid ${t.tableRowBorder}` }}
                 onMouseEnter={e => e.currentTarget.style.background = t.tableRowHover}
                 onMouseLeave={e => e.currentTarget.style.background = ''}>
                 <div style={{ width: 24, height: 24, borderRadius: 6, border: `1.5px dashed ${t.inputBorderLight}`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: t.textFaint, fontSize: 14, flexShrink: 0 }}>+</div>
