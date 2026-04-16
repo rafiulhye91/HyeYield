@@ -12,6 +12,7 @@ logger = logging.getLogger(__name__)
 scheduler = AsyncIOScheduler(timezone="America/New_York")
 
 SCHWAB_REFRESH_TOKEN_TTL_DAYS = 7
+SCHWAB_REFRESH_INTERVAL_DAYS = 2  # refresh every 2 days → 5-day safety margin before 7-day TTL
 
 
 def _acct_short(account_name: str, account_number: str) -> str:
@@ -214,18 +215,22 @@ async def refresh_tokens_job(user_id: int) -> None:
 
 
 def register_token_refresh_job(user_id: int, refresh_token_obtained_at: datetime | None = None) -> None:
-    """Add or replace the 5-day token refresh job for a user.
+    """Add or replace the token keep-alive job for a user.
 
-    When refresh_token_obtained_at is provided (e.g. on startup), start_date is
-    anchored to token age so a server restart doesn't reset the countdown.
+    Fires every SCHWAB_REFRESH_INTERVAL_DAYS days.  start_date is anchored to
+    the token's age so a server restart doesn't reset the countdown.  When
+    obtained_at is unknown (NULL), we fire immediately because we can't tell
+    how close the token is to its 7-day TTL.
     """
     job_id = f"token_refresh_{user_id}"
 
-    start_date = None
-    if refresh_token_obtained_at is not None:
-        start_date = refresh_token_obtained_at + timedelta(days=5)
+    if refresh_token_obtained_at is None:
+        # Unknown token age — refresh immediately to be safe
+        start_date = datetime.utcnow()
+    else:
+        start_date = refresh_token_obtained_at + timedelta(days=SCHWAB_REFRESH_INTERVAL_DAYS)
         if start_date < datetime.utcnow():
-            # Token is overdue for a refresh — fire as soon as possible
+            # Token is overdue — fire as soon as possible
             start_date = datetime.utcnow()
 
     scheduler.add_job(
@@ -233,7 +238,7 @@ def register_token_refresh_job(user_id: int, refresh_token_obtained_at: datetime
         trigger="interval",
         id=job_id,
         kwargs={"user_id": user_id},
-        days=5,
+        days=SCHWAB_REFRESH_INTERVAL_DAYS,
         start_date=start_date,
         replace_existing=True,
     )

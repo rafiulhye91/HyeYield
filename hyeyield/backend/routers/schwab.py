@@ -199,8 +199,11 @@ async def connect_schwab(
     if resp.status_code != 200:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=f"Schwab token exchange failed: {resp.text}")
 
+    from datetime import datetime
+
     token_data = resp.json()
     current_user.set_refresh_token(token_data["refresh_token"])
+    current_user.refresh_token_obtained_at = datetime.utcnow()
     await db.commit()
 
     # Auto-discover and sync all Schwab accounts
@@ -208,6 +211,7 @@ async def connect_schwab(
     try:
         access_token, new_refresh = await client.refresh_access_token()
         current_user.set_refresh_token(new_refresh)
+        current_user.refresh_token_obtained_at = datetime.utcnow()
         balances_data = await client.get_all_balances(access_token)
         for item in balances_data:
             acct = item.get("securitiesAccount", {})
@@ -234,7 +238,7 @@ async def connect_schwab(
         pass  # token saved — account sync can be retried via /schwab/sync
 
     from backend.services.scheduler import register_token_refresh_job
-    register_token_refresh_job(current_user.id)
+    register_token_refresh_job(current_user.id, current_user.refresh_token_obtained_at)
 
     return {"success": True}
 
