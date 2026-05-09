@@ -1,3 +1,4 @@
+from __future__ import annotations
 import re
 from typing import List, Optional
 from urllib.parse import urlencode, unquote
@@ -22,7 +23,7 @@ def _account_label(acct: dict) -> tuple[str, str]:
     name = nick if nick else type_label
     return name, type_label
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -40,7 +41,9 @@ from backend.schemas.account import (
 )
 from pydantic import BaseModel
 from backend.services.schwab_client import SchwabAuthError, SchwabAPIError, SchwabClient
+from backend.services.audit import AuditLog
 from backend.utils.jwt_utils import get_current_user
+from backend.utils.csrf import csrf_protection
 
 router = APIRouter(tags=["schwab"])
 
@@ -96,10 +99,13 @@ async def list_accounts(
 
 @router.post("/accounts", response_model=AccountResponse, status_code=status.HTTP_201_CREATED)
 async def create_account(
+    request: Request,
     body: AccountCreate,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
+    _csrf_check: None = Depends(csrf_protection),
 ):
+    """Create new account (requires CSRF token)"""
     account = SchwabAccount(
         user_id=current_user.id,
         account_number=body.account_number,
@@ -111,16 +117,28 @@ async def create_account(
     db.add(account)
     await db.commit()
     await db.refresh(account)
+
+    await AuditLog.sensitive_operation(
+        current_user.id,
+        "CREATE_ACCOUNT",
+        {"account_number": account.account_number, "account_name": account.account_name},
+        request.client.host,
+        db,
+    )
+
     return _account_response(account, current_user)
 
 
 @router.put("/accounts/{account_id}", response_model=AccountResponse)
 async def update_account(
+    request: Request,
     account_id: int,
     body: AccountUpdate,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
+    _csrf_check: None = Depends(csrf_protection),
 ):
+    """Update account settings (requires CSRF token)"""
     account = await _get_owned_account(account_id, current_user, db)
 
     if body.account_name is not None:
@@ -134,16 +152,37 @@ async def update_account(
 
     await db.commit()
     await db.refresh(account)
+
+    await AuditLog.sensitive_operation(
+        current_user.id,
+        "UPDATE_ACCOUNT",
+        {"account_id": account.id, "account_number": account.account_number},
+        request.client.host,
+        db,
+    )
+
     return _account_response(account, current_user)
 
 
 @router.delete("/accounts/{account_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_account(
+    request: Request,
     account_id: int,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
+    _csrf_check: None = Depends(csrf_protection),
 ):
+    """Delete account (requires CSRF token)"""
     account = await _get_owned_account(account_id, current_user, db)
+
+    await AuditLog.sensitive_operation(
+        current_user.id,
+        "DELETE_ACCOUNT",
+        {"account_id": account.id, "account_number": account.account_number},
+        request.client.host,
+        db,
+    )
+
     await db.delete(account)
     await db.commit()
 

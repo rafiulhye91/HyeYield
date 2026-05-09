@@ -1,7 +1,7 @@
 import dataclasses
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -11,7 +11,9 @@ from backend.models.trade_log import TradeLog
 from backend.models.user import User
 from backend.services.invest_engine import InvestEngine
 from backend.services.notify import send_notify
+from backend.services.audit import AuditLog
 from backend.utils.jwt_utils import get_current_user
+from backend.utils.csrf import csrf_protection
 
 router = APIRouter(tags=["invest"])
 
@@ -40,12 +42,18 @@ async def dry_run(
 
 @router.post("/invest/live")
 async def live_invest(
+    request: Request,
     account_id: Optional[int] = None,
     x_confirm_live: Optional[str] = Header(default=None, alias="X-Confirm-Live"),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
+    _csrf_check: None = Depends(csrf_protection),
 ):
+    """Execute live investment orders (requires CSRF token)"""
     if x_confirm_live != "true":
+        await AuditLog.authorization_failure(
+            current_user.id, "live_invest", "missing_confirm_header", request.client.host, db
+        )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Missing required header: X-Confirm-Live: true",
@@ -57,6 +65,15 @@ async def live_invest(
         results = [result]
     else:
         results = await engine.run_all(dry_run=False)
+
+    # Audit log sensitive operation
+    await AuditLog.sensitive_operation(
+        current_user.id,
+        "LIVE_INVEST",
+        {"account_id": account_id, "orders_count": sum(len(r.orders) for r in results)},
+        request.client.host,
+        db,
+    )
 
     # Send ntfy notification
     if current_user.ntfy_topic:
@@ -104,21 +121,34 @@ async def get_rotation(
 
 @router.post("/invest/rotation/reset")
 async def reset_rotation(
+    request: Request,
     account_id: int,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
+    _csrf_check: None = Depends(csrf_protection),
 ):
+    """Reset rotation state for an account"""
     result = await db.execute(
         select(SchwabAccount).where(
-            SchwabAccount.id == account_id,
-            SchwabAccount.user_id == current_user.id,
+            (SchwabAccount.id == account_id) &
+            (SchwabAccount.user_id == current_user.id),
         )
     )
     account = result.scalar_one_or_none()
     if account is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Account not found")
+
     account.rotation_state = 0
     await db.commit()
+
+    await AuditLog.sensitive_operation(
+        current_user.id,
+        "RESET_ROTATION",
+        {"account_id": account.id, "account_name": account.account_name},
+        request.client.host,
+        db,
+    )
+
     return {"account_id": account_id, "rotation_state": 0}
 
 
@@ -200,10 +230,13 @@ async def get_schedule(
 
 @router.put("/invest/schedule")
 async def update_schedule(
+    request: Request,
     body: ScheduleUpdate,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
+    _csrf_check: None = Depends(csrf_protection),
 ):
+    """Update investment schedule (requires CSRF token)"""
     from backend.services.scheduler import register_invest_job, scheduler
 
     parts = body.cron.strip().split()
@@ -220,6 +253,14 @@ async def update_schedule(
 
     current_user.schedule_cron = body.cron
     await db.commit()
+
+    await AuditLog.sensitive_operation(
+        current_user.id,
+        "UPDATE_SCHEDULE",
+        {"cron": body.cron},
+        request.client.host,
+        db,
+    )
 
     job = scheduler.get_job(f"invest_{current_user.id}")
     next_run = job.next_run_time.isoformat() if job and job.next_run_time else None
